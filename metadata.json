@@ -1,0 +1,7 @@
+{
+  "name": "KDB Kericho Payment Agreement Portal (PAP)",
+  "description": "A professional digital platform for Kenya Dairy Board (KDB) operators to manage levy arrears through structured payment agreements and digital signatures.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
