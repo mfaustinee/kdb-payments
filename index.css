@@ -17,6 +17,16 @@ body {
   100% { width: 100%; }
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
 @media print {
   .print\:hidden { display: none !important; }
   .print\:p-8 { padding: 2rem !important; }

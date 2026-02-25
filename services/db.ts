@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { AgreementData, DebtorRecord, StaffConfig, getEnv } from '../types.ts';
 import { EmailService } from './email.ts';
 
-const SUPABASE_URL = getEnv('SUPABASE_URL');
-const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY');
+const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
+const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
 
 // Initialize only if keys are present to prevent crashes
 const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY) 

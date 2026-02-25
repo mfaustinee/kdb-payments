@@ -4,7 +4,7 @@ import { AgreementForm } from './components/AgreementForm.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { SuccessScreen } from './components/SuccessScreen.tsx';
 import { AgreementData, DebtorRecord, ViewState, ArrearItem, StaffConfig } from './types.ts';
-import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2, LogOut, Lock } from 'lucide-react';
 import { DBService } from './services/db.ts';
 import { EmailService } from './services/email.ts';
 
@@ -18,10 +18,39 @@ const App: React.FC = () => {
     officialSignature: ''
   });
   const [currentAgreement, setCurrentAgreement] = useState<AgreementData | null>(null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState(false);
 
   useEffect(() => {
     loadDatabase();
   }, []);
+
+  const handleAdminAccess = () => {
+    if (isAdminAuthenticated) {
+      setView('ADMIN_DASHBOARD');
+    } else {
+      setView('ADMIN_LOGIN');
+    }
+  };
+
+  const handleAdminLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (adminPasswordInput === 'KDB@2024') {
+      setIsAdminAuthenticated(true);
+      setView('ADMIN_DASHBOARD');
+      setLoginError(false);
+      setAdminPasswordInput('');
+    } else {
+      setLoginError(true);
+      setTimeout(() => setLoginError(false), 2000);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    setView('CLIENT_PORTAL');
+  };
 
   const loadDatabase = async () => {
     setIsSyncing(true);
@@ -34,6 +63,17 @@ const App: React.FC = () => {
 
       const uniqueAgreements = Array.from(new Map(storedAgreements.map(a => [a.id, a])).values());
       setAgreements(uniqueAgreements);
+      
+      // Check for direct link ID
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
+      if (id) {
+        const found = uniqueAgreements.find(a => a.id === id);
+        if (found) {
+          setCurrentAgreement(found);
+          setView('SUCCESS_SCREEN');
+        }
+      }
       setUnreadCount(uniqueAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
       setStaffConfig(storedStaff);
 
@@ -134,7 +174,7 @@ const App: React.FC = () => {
               </div>
               <div className="hidden sm:block">
                 <div className="flex items-center space-x-2">
-                  <span className="font-black text-xs uppercase tracking-widest text-slate-800">KDB PAP</span>
+                  <span className="font-black text-xs uppercase tracking-widest text-slate-800">KDB Payments</span>
                   <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full border ${isSyncing ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'}`}>
                     {isSyncing ? (
                       <Loader2 className="w-2.5 h-2.5 text-amber-500 animate-spin" />
@@ -158,7 +198,7 @@ const App: React.FC = () => {
                 Portal
               </button>
               <button 
-                onClick={() => setView('ADMIN_DASHBOARD')}
+                onClick={handleAdminAccess}
                 className={`relative flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all ${view === 'ADMIN_DASHBOARD' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 <ClipboardList className="w-4 h-4 mr-2" />
@@ -169,6 +209,15 @@ const App: React.FC = () => {
                   </span>
                 )}
               </button>
+              {isAdminAuthenticated && (
+                <button 
+                  onClick={handleAdminLogout}
+                  className="flex items-center px-4 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-all"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </button>
+              )}
             </nav>
           </div>
         </div>
@@ -177,6 +226,46 @@ const App: React.FC = () => {
       <main className="flex-grow">
         {view === 'CLIENT_PORTAL' && (
           <AgreementForm agreements={agreements} debtors={debtors} onSubmit={handleClientSubmit} />
+        )}
+        {view === 'ADMIN_LOGIN' && (
+          <div className="max-w-md mx-auto mt-20 p-10 bg-white rounded-[40px] shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-300">
+            <div className="text-center mb-8">
+              <div className="bg-slate-900 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <Lock className="text-white w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-800">Admin Access</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-2">Restricted Personnel Only</p>
+            </div>
+            <form onSubmit={handleAdminLogin} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Security Password</label>
+                <input 
+                  autoFocus
+                  type="password" 
+                  value={adminPasswordInput}
+                  onChange={e => setAdminPasswordInput(e.target.value)}
+                  placeholder="••••••••"
+                  className={`w-full px-6 py-4 rounded-2xl border bg-slate-50 focus:bg-white outline-none transition-all font-bold ${loginError ? 'border-rose-500 ring-4 ring-rose-500/10 animate-shake' : 'focus:ring-4 focus:ring-slate-900/10'}`}
+                />
+              </div>
+              {loginError && (
+                <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest text-center animate-pulse">Invalid Credentials</p>
+              )}
+              <button 
+                type="submit"
+                className="w-full py-5 bg-slate-900 text-white font-black rounded-3xl hover:bg-slate-800 shadow-xl transition-all uppercase tracking-widest text-xs"
+              >
+                Authenticate
+              </button>
+              <button 
+                type="button"
+                onClick={() => setView('CLIENT_PORTAL')}
+                className="w-full text-slate-400 font-bold text-[10px] uppercase tracking-widest hover:text-slate-600 transition-all"
+              >
+                Return to Portal
+              </button>
+            </form>
+          </div>
         )}
         {view === 'ADMIN_DASHBOARD' && (
           <AdminDashboard 

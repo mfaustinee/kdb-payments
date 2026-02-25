@@ -23,12 +23,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const [rejectionReason, setRejectionReason] = useState('');
   const [adminName, setAdminName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddingDebtor, setIsAddingDebtor] = useState(false);
+  const [newDebtor, setNewDebtor] = useState<Partial<DebtorRecord>>({
+    dboName: '',
+    permitNo: '',
+    county: '',
+    totalArrears: 0,
+    tel: '',
+    debitNoteNo: '',
+    arrearsBreakdown: [],
+    installments: []
+  });
   
   const envCheck = {
-    supabaseUrl: !!((window as any).env?.SUPABASE_URL || (process.env as any)?.SUPABASE_URL),
-    supabaseKey: !!((window as any).env?.SUPABASE_ANON_KEY || (process.env as any)?.SUPABASE_ANON_KEY),
-    emailId: !!((window as any).env?.EMAILJS_SERVICE_ID || (process.env as any)?.EMAILJS_SERVICE_ID),
-    emailKey: !!((window as any).env?.EMAILJS_PUBLIC_KEY || (process.env as any)?.EMAILJS_PUBLIC_KEY),
+    supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+    supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+    emailId: !!import.meta.env.VITE_EMAILJS_SERVICE_ID,
+    emailKey: !!import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
   };
 
   const selectedReview = agreements.find(a => a.id === selectedReviewId);
@@ -59,7 +70,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
       await new Promise(r => setTimeout(r, 800));
     }
 
-    onAction(selectedReview!.id, 'approve', { signature: staffConfig.officialSignature, name: adminName });
+    if (!selectedReview) return;
+    onAction(selectedReview.id, 'approve', { signature: staffConfig.officialSignature, name: adminName });
     setIsApproving(false);
     setAdminName('');
   };
@@ -73,10 +85,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
     setRejectionReason('');
   };
 
+  const handleAddDebtor = () => {
+    if (!newDebtor.dboName || !newDebtor.permitNo || !newDebtor.totalArrears) {
+      return alert("Please fill in all required fields.");
+    }
+    const id = `D${Math.floor(Math.random() * 10000).toString().padStart(3, '0')}`;
+    const debtor: DebtorRecord = {
+      ...(newDebtor as DebtorRecord),
+      id,
+      arrearsBreakdown: [{ id: '1', month: 'Current', amount: newDebtor.totalArrears || 0 }],
+      totalArrearsWords: 'Amount specified in ledger',
+      arrearsPeriod: 'Current',
+      installments: [{ no: 1, period: 'Current', dueDate: '', amount: newDebtor.totalArrears || 0 }]
+    };
+    onDebtorUpdate([...debtors, debtor]);
+    setIsAddingDebtor(false);
+    setNewDebtor({
+      dboName: '',
+      permitNo: '',
+      county: '',
+      totalArrears: 0,
+      tel: '',
+      debitNoteNo: '',
+      arrearsBreakdown: [],
+      installments: []
+    });
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
       {showPreview && selectedReview && (
         <PDFPreview agreement={selectedReview} onClose={() => setShowPreview(false)} />
+      )}
+
+      {isAddingDebtor && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-2xl w-full space-y-6 animate-in zoom-in-95">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Add New Ledger Entry</h3>
+              <button onClick={() => setIsAddingDebtor(false)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">DBO Name</label>
+                <input value={newDebtor.dboName} onChange={e => setNewDebtor({...newDebtor, dboName: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="e.g. Sunrise Dairy" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Permit No</label>
+                <input value={newDebtor.permitNo} onChange={e => setNewDebtor({...newDebtor, permitNo: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="KDB/MB/..." />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">County</label>
+                <input value={newDebtor.county} onChange={e => setNewDebtor({...newDebtor, county: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="e.g. Kericho" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Arrears Amount</label>
+                <input type="number" value={newDebtor.totalArrears} onChange={e => setNewDebtor({...newDebtor, totalArrears: Number(e.target.value)})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="0.00" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Phone No (Secret)</label>
+                <input value={newDebtor.tel} onChange={e => setNewDebtor({...newDebtor, tel: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="07..." />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Debit Note No (Alt Secret)</label>
+                <input value={newDebtor.debitNoteNo} onChange={e => setNewDebtor({...newDebtor, debitNoteNo: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="DN/..." />
+              </div>
+            </div>
+            <button onClick={handleAddDebtor} className="w-full py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg hover:bg-emerald-700 transition-all uppercase tracking-widest text-xs">Save to Ledger</button>
+          </div>
+        </div>
       )}
 
       {isApproving && (
@@ -104,7 +181,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
             <Database className="w-4 h-4 mr-2" /> Ledger
           </button>
           <button onClick={() => setTab('settings')} className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center ${tab === 'settings' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-            <Globe className="w-4 h-4 mr-2" /> Deploy
+            <Settings className="w-4 h-4 mr-2" /> Settings
           </button>
         </div>
       </div>
@@ -170,6 +247,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                         <div className="text-3xl font-black">KES {selectedReview.totalArrears.toLocaleString()}</div>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center"><Calendar className="w-3 h-3 mr-2" /> Agreed Payment Schedule</h4>
+                      <div className="border rounded-3xl overflow-hidden shadow-sm">
+                        <table className="w-full text-[11px] text-left">
+                          <thead className="bg-slate-50 font-black text-slate-400 uppercase text-[9px] tracking-widest">
+                            <tr>
+                              <th className="px-6 py-4">Inst.</th>
+                              <th className="px-6 py-4">Period</th>
+                              <th className="px-6 py-4">Due Date</th>
+                              <th className="px-6 py-4 text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {selectedReview.installments.map((inst, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-6 py-4 font-bold">{inst.no}</td>
+                                <td className="px-6 py-4 text-slate-500">{inst.period}</td>
+                                <td className="px-6 py-4 font-black text-slate-700">{inst.dueDate || 'TBD'}</td>
+                                <td className="px-6 py-4 text-right font-black text-emerald-600">KES {inst.amount.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                   </div>
 
                   <div className="space-y-5">
@@ -270,7 +373,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                     />
                 </div>
                 <div className="flex gap-4 w-full sm:w-auto">
-                  <button className="flex-1 sm:flex-none px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center shadow-lg hover:bg-slate-800 transition-all">
+                  <button onClick={() => setIsAddingDebtor(true)} className="flex-1 sm:flex-none px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center shadow-lg hover:bg-slate-800 transition-all">
                       <UserPlus className="w-4 h-4 mr-2" /> Add Entry
                   </button>
                 </div>

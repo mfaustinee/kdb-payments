@@ -1,8 +1,40 @@
 
 import { AgreementData, KDB_ADMIN_EMAIL } from '../types.ts';
+import { jsPDF } from 'jspdf';
 
 const getEnv = (key: string, fallback: string) => {
   return import.meta.env[key] || fallback;
+};
+
+const generateAgreementPDF = (agreement: AgreementData): string => {
+  const doc = new jsPDF();
+  
+  doc.setFontSize(20);
+  doc.text("KDB PAYMENT AGREEMENT", 105, 20, { align: 'center' });
+  
+  doc.setFontSize(12);
+  doc.text(`DBO Name: ${agreement.dboName}`, 20, 40);
+  doc.text(`Permit No: ${agreement.permitNo}`, 20, 50);
+  doc.text(`County: ${agreement.county}`, 20, 60);
+  doc.text(`Total Arrears: KES ${agreement.totalArrears.toLocaleString()}`, 20, 70);
+  
+  doc.text("Payment Schedule:", 20, 90);
+  let y = 100;
+  agreement.installments.forEach((inst, i) => {
+    doc.text(`${inst.no}. ${inst.period} - Due: ${inst.dueDate || 'TBD'} - Amount: KES ${inst.amount.toLocaleString()}`, 25, y);
+    y += 10;
+  });
+  
+  doc.text("Execution Details:", 20, y + 10);
+  doc.text(`Signatory: ${agreement.clientName} (${agreement.clientTitle})`, 20, y + 20);
+  doc.text(`Date: ${new Date(agreement.date).toLocaleDateString()}`, 20, y + 30);
+  
+  if (agreement.officialName) {
+    doc.text(`Approved By: ${agreement.officialName}`, 20, y + 40);
+    doc.text(`Approval Date: ${agreement.approvedAt ? new Date(agreement.approvedAt).toLocaleDateString() : 'N/A'}`, 20, y + 50);
+  }
+
+  return doc.output('datauristring').split(',')[1];
 };
 
 export const EmailService = {
@@ -20,7 +52,10 @@ export const EmailService = {
       return false;
     }
 
+    const pdfBase64 = generateAgreementPDF(agreement);
+
     const templateParams = {
+      to_email: KDB_ADMIN_EMAIL,
       to_name: "Faustine Kigunda",
       from_name: agreement.dboName,
       dbo_name: agreement.dboName,
@@ -30,7 +65,8 @@ export const EmailService = {
       admin_email: KDB_ADMIN_EMAIL,
       portal_link: window.location.origin,
       submission_type: agreement.status === 'resubmission_requested' ? 'RE-SUBMISSION REQUEST' : 'NEW AGREEMENT SUBMISSION',
-      reason: agreement.resubmissionReason || 'N/A'
+      reason: agreement.resubmissionReason || 'N/A',
+      content: pdfBase64 // Attachment parameter
     };
 
     try {
@@ -56,6 +92,8 @@ export const EmailService = {
   async sendClientApproval(agreement: AgreementData) {
     if (!this.config.PUBLIC_KEY) return false;
 
+    const pdfBase64 = generateAgreementPDF(agreement);
+
     const templateParams = {
       to_email: agreement.clientEmail,
       dbo_name: agreement.dboName,
@@ -63,7 +101,8 @@ export const EmailService = {
       official_name: agreement.officialName || "Kenya Dairy Board",
       total_arrears: agreement.totalArrears.toLocaleString(),
       agreement_link: `${window.location.origin}/?id=${agreement.id}`,
-      status_message: "Your agreement has been approved and signed by KDB."
+      status_message: "Your agreement has been approved and signed by KDB.",
+      content: pdfBase64 // Attachment parameter
     };
 
     try {
@@ -89,6 +128,8 @@ export const EmailService = {
   async sendClientRejection(agreement: AgreementData) {
     if (!this.config.PUBLIC_KEY) return false;
 
+    const pdfBase64 = generateAgreementPDF(agreement);
+
     const templateParams = {
       to_email: agreement.clientEmail,
       dbo_name: agreement.dboName,
@@ -96,7 +137,8 @@ export const EmailService = {
       official_name: "Kenya Dairy Board",
       total_arrears: agreement.totalArrears.toLocaleString(),
       status_message: agreement.rejectionReason || "Your submission has been reviewed and requires changes.",
-      agreement_link: `${window.location.origin}`
+      agreement_link: `${window.location.origin}`,
+      content: pdfBase64 // Attachment parameter
     };
 
     try {
