@@ -201,18 +201,22 @@ const App: React.FC = () => {
                 <User className="w-4 h-4 mr-2" />
                 Portal
               </button>
-              <button 
-                onClick={handleAdminAccess}
-                className={`relative flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all ${location.pathname === '/admin' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                <ClipboardList className="w-4 h-4 mr-2" />
-                Admin
-                {unreadCount > 0 && location.pathname !== '/admin' && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-600 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white animate-bounce font-black">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
+              
+              {(isAdminAuthenticated || location.pathname === '/admin') && (
+                <button 
+                  onClick={handleAdminAccess}
+                  className={`relative flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all ${location.pathname === '/admin' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Admin
+                  {unreadCount > 0 && location.pathname !== '/admin' && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-600 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white animate-bounce font-black">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
               {isAdminAuthenticated && (
                 <button 
                   onClick={handleAdminLogout}
