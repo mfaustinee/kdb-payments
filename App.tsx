@@ -108,26 +108,32 @@ const App: React.FC = () => {
 
   const handleClientSubmit = async (data: AgreementData) => {
     setIsSyncing(true);
-    const submission = { ...data, submittedAt: new Date().toISOString() };
-    
-    // Check if it's an update (resubmission request)
-    const existing = agreements.find(a => a.id === data.id);
-    if (existing) {
-      await DBService.updateAgreement(data.id, submission);
-    } else {
-      await DBService.saveAgreement(submission);
+    try {
+      const submission = { ...data, submittedAt: new Date().toISOString() };
+      
+      // Check if it's an update (resubmission request)
+      const existing = agreements.find(a => a.id === data.id);
+      if (existing) {
+        await DBService.updateAgreement(data.id, submission);
+      } else {
+        await DBService.saveAgreement(submission);
+      }
+      
+      // Trigger Admin Notification
+      await EmailService.sendAdminNotification(submission);
+      
+      const updated = await DBService.getAgreements();
+      setAgreements(updated);
+      setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      
+      setCurrentAgreement(data);
+      setView('SUCCESS_SCREEN');
+    } catch (error) {
+      console.error("Submission failed:", error);
+      alert("Submission failed. Please check your connection and try again.");
+    } finally {
+      setIsSyncing(false);
     }
-    
-    // Trigger Admin Notification
-    await EmailService.sendAdminNotification(submission);
-    
-    const updated = await DBService.getAgreements();
-    setAgreements(updated);
-    setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
-    
-    setCurrentAgreement(data);
-    setView('SUCCESS_SCREEN');
-    setIsSyncing(false);
   };
 
   const handleAdminAction = async (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => {

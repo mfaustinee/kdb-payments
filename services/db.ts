@@ -64,12 +64,6 @@ export const DBService = {
     }
     const updated = [...existing, agreement];
     localStorage.setItem(STORAGE_KEYS.AGREEMENTS, JSON.stringify(updated));
-    
-    try {
-      await EmailService.sendAdminNotification(agreement);
-    } catch (e) {
-      console.error("Notification dispatch failed.");
-    }
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
