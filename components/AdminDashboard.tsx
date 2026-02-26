@@ -8,12 +8,14 @@ interface AdminDashboardProps {
   agreements: AgreementData[];
   debtors: DebtorRecord[];
   staffConfig: StaffConfig;
+  isSyncing?: boolean;
+  onRefresh?: () => void;
   onAction: (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => void;
   onDebtorUpdate: (updated: DebtorRecord[]) => void;
   onStaffUpdate: (config: StaffConfig) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debtors, staffConfig, onAction, onDebtorUpdate, onStaffUpdate }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debtors, staffConfig, isSyncing, onRefresh, onAction, onDebtorUpdate, onStaffUpdate }) => {
   const [tab, setTab] = useState<'reviews' | 'debtors' | 'settings'>('reviews');
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -268,7 +270,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">KDB Admin Workspace</h2>
+          <div className="flex items-center space-x-3">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">KDB Admin Workspace</h2>
+            {onRefresh && (
+              <button 
+                onClick={onRefresh}
+                disabled={isSyncing}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-emerald-600 group"
+                title="Refresh Data"
+              >
+                <Loader2 className={`w-5 h-5 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+              </button>
+            )}
+          </div>
           <p className="text-slate-500 font-medium mt-1">Operational control for Kericho & Region levy compliance.</p>
         </div>
         <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
@@ -283,6 +297,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
           </button>
         </div>
       </div>
+
+      {!envCheck.emailId && (
+        <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center text-amber-800 text-xs font-bold">
+          <AlertTriangle className="w-4 h-4 mr-3 text-amber-500" />
+          <span>EmailJS configuration is missing. Submissions will not trigger email notifications. Please set VITE_EMAILJS_SERVICE_ID and VITE_EMAILJS_PUBLIC_KEY.</span>
+        </div>
+      )}
 
       {tab === 'reviews' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">

@@ -240,6 +240,8 @@ const App: React.FC = () => {
                 agreements={agreements} 
                 debtors={debtors}
                 staffConfig={staffConfig}
+                isSyncing={isSyncing}
+                onRefresh={loadDatabase}
                 onAction={handleAdminAction} 
                 onDebtorUpdate={handleDebtorUpdate}
                 onStaffUpdate={handleStaffUpdate}
