@@ -15,12 +15,20 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
     // Though in our case they are outside.
     
     const canvas = await html2canvas(element, {
-      scale: 2, // 2 is usually enough and more stable
+      scale: 2,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false, // Changed to false to better handle CORS with anonymous
       logging: true,
       backgroundColor: '#ffffff',
-      windowWidth: 1200, // Fixed width for consistency
+      windowWidth: 1200,
+      height: element.offsetHeight, // Explicitly set height
+      onclone: (clonedDoc) => {
+        // Ensure images are loaded in the clone if possible
+        const images = clonedDoc.getElementsByTagName('img');
+        for (let i = 0; i < images.length; i++) {
+          images[i].src = images[i].src; // Trigger reload in clone
+        }
+      }
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 1.0);
