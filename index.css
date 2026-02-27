@@ -3,6 +3,7 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Times New Roman", Times, serif;
   
   /* Legacy Hex Colors for html2canvas compatibility (avoids oklch error) */
   --color-slate-50: #f8fafc;
