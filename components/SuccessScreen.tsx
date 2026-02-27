@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AgreementData } from '../types';
-import { CheckCircle2, FileText, ArrowLeft, Download, Mail } from 'lucide-react';
+import { CheckCircle2, FileText, ArrowLeft, Download } from 'lucide-react';
 
 interface SuccessScreenProps {
   agreement: AgreementData;
@@ -23,11 +23,11 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ agreement, onRetur
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left mb-12">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start space-x-4">
           <div className="bg-blue-100 p-3 rounded-lg text-blue-600">
-            <Mail className="w-6 h-6" />
+            <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <h4 className="font-bold text-slate-800">Email Notification</h4>
-            <p className="text-sm text-slate-500">An email has been sent to the KDB administrative team to review and countersign.</p>
+            <h4 className="font-bold text-slate-800">Submission Recorded</h4>
+            <p className="text-sm text-slate-500">Your agreement has been securely logged and is now awaiting KDB administrative review.</p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-start space-x-4">
@@ -36,7 +36,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ agreement, onRetur
           </div>
           <div>
             <h4 className="font-bold text-slate-800">Review Timeline</h4>
-            <p className="text-sm text-slate-500">Upon approval, you will receive the final signed agreement in PDF format via email.</p>
+            <p className="text-sm text-slate-500">Upon approval, you can download the final signed agreement in PDF format from the portal.</p>
           </div>
         </div>
       </div>
