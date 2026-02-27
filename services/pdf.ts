@@ -45,18 +45,40 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
     const imgProps = pdf.getImageProperties(imgData);
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    
+    const margin = 15; // 15mm margin
+    const innerWidth = pdfWidth - (margin * 2);
+    const innerHeight = pdfHeight - (margin * 2);
+    const imgHeight = (imgProps.height * innerWidth) / imgProps.width;
+    
     let heightLeft = imgHeight;
-    let position = 0;
+    let position = margin;
 
-    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-    heightLeft -= pdfHeight;
+    // Function to draw white margins to "clip" the image slices
+    const drawMargins = () => {
+      pdf.setFillColor(255, 255, 255);
+      // Top margin
+      pdf.rect(0, 0, pdfWidth, margin, 'F');
+      // Bottom margin
+      pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F');
+      // Left margin
+      pdf.rect(0, 0, margin, pdfHeight, 'F');
+      // Right margin
+      pdf.rect(pdfWidth - margin, 0, margin, pdfHeight, 'F');
+    };
 
+    // Page 1
+    pdf.addImage(imgData, 'JPEG', margin, position, innerWidth, imgHeight);
+    drawMargins();
+    heightLeft -= innerHeight;
+
+    // Subsequent pages
     while (heightLeft > 0) {
-      position -= pdfHeight;
+      position -= innerHeight;
       pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      pdf.addImage(imgData, 'JPEG', margin, position, innerWidth, imgHeight);
+      drawMargins();
+      heightLeft -= innerHeight;
     }
     
     pdf.save(`KDB_Agreement_${agreement.dboName.replace(/\s+/g, '_')}.pdf`);
