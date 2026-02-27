@@ -16,15 +16,15 @@ interface AgreementContentProps {
 }
 
 const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) => (
-  <div className="p-16 pb-32 text-slate-900 bg-white min-h-[1200px] leading-[1.6] text-[12pt]" id={id}>
+  <div className="px-16 pt-4 pb-32 text-slate-900 bg-white min-h-[1200px] leading-[1.6] text-[12pt]" id={id}>
     {/* Header */}
-    <div className="flex flex-col items-center text-center mb-10">
+    <div className="flex flex-col items-center text-center mb-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-black uppercase tracking-tight">KENYA DAIRY BOARD - KERICHO</h1>
         <p className="text-base font-bold">Ardhi House (Huduma Centre) 5th Floor, Wing B.</p>
         <p className="text-base font-bold">Tel: 0717997465 / 0734026367</p>
       </div>
-      <div className="w-full border-b-2 border-slate-900 mt-6"></div>
+      <div className="w-full border-b-2 border-slate-900 mt-4"></div>
       <h2 className="text-2xl font-black mt-6 uppercase underline decoration-2 underline-offset-4">Payment Agreement Form – Consumer Safety Levy Arrears</h2>
     </div>
 
