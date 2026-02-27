@@ -145,6 +145,22 @@ const App: React.FC = () => {
     setIsSyncing(false);
   };
 
+  const handleDeleteAgreement = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this submission? This action cannot be undone.")) return;
+    
+    setIsSyncing(true);
+    try {
+      await DBService.deleteAgreement(id);
+      const updated = await DBService.getAgreements();
+      setAgreements(updated);
+      setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+    } catch (error) {
+      console.error("Deletion failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleDebtorUpdate = async (updated: DebtorRecord[]) => {
     setDebtors(updated);
     await DBService.saveDebtors(updated);
@@ -231,6 +247,7 @@ const App: React.FC = () => {
                 isSyncing={isSyncing}
                 onRefresh={loadDatabase}
                 onAction={handleAdminAction} 
+                onDeleteAgreement={handleDeleteAgreement}
                 onDebtorUpdate={handleDebtorUpdate}
                 onStaffUpdate={handleStaffUpdate}
               />

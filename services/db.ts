@@ -128,6 +128,23 @@ export const DBService = {
     localStorage.setItem(STORAGE_KEYS.AGREEMENTS, JSON.stringify(updated));
   },
 
+  async deleteAgreement(id: string): Promise<void> {
+    console.log("[DBService] Deleting agreement:", id);
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('agreements').delete().eq('id', id);
+        if (error) console.error("[DBService] Cloud delete error:", error);
+      } catch (e) {
+        console.error("[DBService] Cloud delete exception:", e);
+      }
+    }
+
+    const localRaw = localStorage.getItem(STORAGE_KEYS.AGREEMENTS);
+    const localData: AgreementData[] = localRaw ? JSON.parse(localRaw) : [];
+    const updated = localData.filter(a => a.id !== id);
+    localStorage.setItem(STORAGE_KEYS.AGREEMENTS, JSON.stringify(updated));
+  },
+
   async getDebtors(): Promise<DebtorRecord[]> {
     let cloudData: DebtorRecord[] = [];
     let cloudSuccess = false;

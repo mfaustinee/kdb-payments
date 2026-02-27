@@ -48,11 +48,6 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ agreement, onRetur
         >
           <ArrowLeft className="mr-2 w-5 h-5" /> Start New Form
         </button>
-        <button 
-          className="w-full sm:w-auto px-8 py-3 bg-white text-emerald-600 border-2 border-emerald-600 rounded-xl font-bold hover:bg-emerald-50 transition-colors flex items-center justify-center"
-        >
-          <Download className="mr-2 w-5 h-5" /> Download Draft
-        </button>
       </div>
     </div>
   );

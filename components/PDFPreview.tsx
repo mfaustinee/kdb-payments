@@ -19,7 +19,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ agreement, onClose, isHi
           <div className="flex flex-col items-center text-center mb-10">
             <div className="mb-4">
               <img 
-                src="https://ais-dev-zlwayvxgrumdy6a2ldbvpr-24052486787.europe-west2.run.app/api/images/96/0" 
+                src="/api/images/96/0" 
                 alt="KDB Logo" 
                 className="h-32 w-auto object-contain mx-auto"
                 crossOrigin="anonymous"
@@ -156,7 +156,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ agreement, onClose, isHi
           <div className="flex flex-col items-center text-center mb-10">
             <div className="mb-4">
               <img 
-                src="https://ais-dev-zlwayvxgrumdy6a2ldbvpr-24052486787.europe-west2.run.app/api/images/96/0" 
+                src="/api/images/96/0" 
                 alt="KDB Logo" 
                 className="h-32 w-auto object-contain mx-auto"
                 crossOrigin="anonymous"

@@ -15,12 +15,12 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
     // Though in our case they are outside.
     
     const canvas = await html2canvas(element, {
-      scale: 3, // Even higher scale for professional print quality
+      scale: 2, // 2 is usually enough and more stable
       useCORS: true,
-      logging: false,
+      allowTaint: true,
+      logging: true,
       backgroundColor: '#ffffff',
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight
+      windowWidth: 1200, // Fixed width for consistency
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 1.0);
@@ -40,7 +40,7 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
     
     pdf.save(`KDB_Agreement_${agreement.dboName.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
-    console.error("Error generating PDF:", error);
-    alert("Failed to generate PDF. Please try again.");
+    console.error("Detailed PDF Error:", error);
+    alert(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };

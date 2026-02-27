@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types.ts';
-import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, Activity, AlertCircle, ExternalLink, PenTool } from 'lucide-react';
+import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, Activity, AlertCircle, ExternalLink, PenTool, Trash } from 'lucide-react';
 import { PDFPreview } from './PDFPreview.tsx';
 import { downloadAgreementPDF } from '../services/pdf.ts';
+import { numberToWords } from '../utils/numberToWords.ts';
 
 interface AdminDashboardProps {
   agreements: AgreementData[];
@@ -12,11 +13,12 @@ interface AdminDashboardProps {
   isSyncing?: boolean;
   onRefresh?: () => void;
   onAction: (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => void;
+  onDeleteAgreement?: (id: string) => void;
   onDebtorUpdate: (updated: DebtorRecord[]) => void;
   onStaffUpdate: (config: StaffConfig) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debtors, staffConfig, isSyncing, onRefresh, onAction, onDebtorUpdate, onStaffUpdate }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debtors, staffConfig, isSyncing, onRefresh, onAction, onDeleteAgreement, onDebtorUpdate, onStaffUpdate }) => {
   const [tab, setTab] = useState<'reviews' | 'debtors' | 'settings'>('reviews');
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -130,6 +132,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         ...(newDebtor as DebtorRecord),
         id: editingDebtorId,
         totalArrears,
+        totalArrearsWords: numberToWords(totalArrears),
         installments: finalInstallments,
         arrearsPeriod
       } : d);
@@ -141,7 +144,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         id,
         totalArrears,
         arrearsBreakdown: finalInstallments.map((inst, i) => ({ id: String(i), month: inst.period, amount: inst.amount })),
-        totalArrearsWords: 'Amount specified in ledger',
+        totalArrearsWords: numberToWords(totalArrears),
         arrearsPeriod,
         installments: finalInstallments
       };
@@ -177,8 +180,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
-      {/* Hidden PDF Preview for background generation */}
-      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }}>
+      {/* Hidden PDF Generation Container - Moved off-screen but kept in layout for html2canvas */}
+      <div style={{ position: 'fixed', top: 0, left: '-9999px', width: '1200px', zIndex: -1000 }}>
         {selectedReview && (
           <div id="formal-agreement-hidden">
             <PDFPreview agreement={selectedReview} onClose={() => {}} isHidden />
@@ -322,19 +325,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
               <div className="bg-white p-12 rounded-[32px] border-2 border-dashed border-slate-200 text-center text-slate-400 text-sm font-medium">No documents awaiting review</div>
             ) : (
               agreements.map(a => (
-                <button key={a.id} onClick={() => { setSelectedReviewId(a.id); setIsRejecting(false); }} className={`w-full p-6 rounded-[32px] border text-left transition-all ${selectedReviewId === a.id ? 'border-emerald-600 bg-emerald-50/50 shadow-xl' : 'border-white bg-white hover:border-emerald-200 shadow-sm'}`}>
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="font-bold text-slate-800 block truncate leading-tight">{a.dboName}</span>
-                    <div className={`w-2 h-2 rounded-full ${a.status === 'submitted' ? 'bg-amber-400' : a.status === 'resubmission_requested' ? 'bg-purple-500 animate-pulse' : a.status === 'approved' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                  </div>
-                  <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                    <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" /> {a.county}</span>
-                    <span>•</span>
-                    <span className={a.status === 'resubmission_requested' ? 'text-purple-600 font-black' : ''}>
-                      {a.status === 'resubmission_requested' ? 'Resubmission Request' : new Date(a.date).toLocaleDateString()}
-                    </span>
-                  </div>
-                </button>
+                <div key={a.id} className="relative group">
+                  <button onClick={() => { setSelectedReviewId(a.id); setIsRejecting(false); }} className={`w-full p-6 rounded-[32px] border text-left transition-all ${selectedReviewId === a.id ? 'border-emerald-600 bg-emerald-50/50 shadow-xl' : 'border-white bg-white hover:border-emerald-200 shadow-sm'}`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="font-bold text-slate-800 block truncate leading-tight">{a.dboName}</span>
+                      <div className={`w-2 h-2 rounded-full ${a.status === 'submitted' ? 'bg-amber-400' : a.status === 'resubmission_requested' ? 'bg-purple-500 animate-pulse' : a.status === 'approved' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                    </div>
+                    <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                      <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" /> {a.county}</span>
+                      <span>•</span>
+                      <span className={a.status === 'resubmission_requested' ? 'text-purple-600 font-black' : ''}>
+                        {a.status === 'resubmission_requested' ? 'Resubmission Request' : new Date(a.date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onDeleteAgreement?.(a.id); }}
+                    className="absolute top-4 right-4 p-2 bg-white text-rose-500 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-50 border border-rose-100 z-10"
+                    title="Delete Submission"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
               ))
             )}
           </div>
