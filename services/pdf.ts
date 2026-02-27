@@ -11,22 +11,27 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
   }
 
   try {
-    // Temporarily remove any print-hidden elements if they are inside the capture area
-    // Though in our case they are outside.
+    // Scroll to top to ensure full capture
+    window.scrollTo(0, 0);
     
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
-      allowTaint: false, // Changed to false to better handle CORS with anonymous
+      allowTaint: false,
       logging: true,
       backgroundColor: '#ffffff',
       windowWidth: 1200,
-      height: element.offsetHeight, // Explicitly set height
+      height: element.scrollHeight, // Use scrollHeight to capture everything
       onclone: (clonedDoc) => {
-        // Ensure images are loaded in the clone if possible
+        const clonedElement = clonedDoc.getElementById(elementId);
+        if (clonedElement) {
+          clonedElement.style.height = 'auto';
+          clonedElement.style.overflow = 'visible';
+        }
+        // Ensure images are loaded
         const images = clonedDoc.getElementsByTagName('img');
         for (let i = 0; i < images.length; i++) {
-          images[i].src = images[i].src; // Trigger reload in clone
+          images[i].src = images[i].src;
         }
       }
     });

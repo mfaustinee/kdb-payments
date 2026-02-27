@@ -16,35 +16,32 @@ interface AgreementContentProps {
 }
 
 const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) => (
-  <div className="p-16 text-slate-900 bg-white min-h-[1056px] leading-[1.6]" id={id}>
+  <div className="p-16 pb-24 text-slate-900 bg-white min-h-[1056px] leading-[1.6] text-[12pt]" id={id}>
     {/* Header */}
     <div className="flex flex-col items-center text-center mb-10">
-      <div className="mb-4">
-        <img 
-          src={`${window.location.origin}/api/images/96/0`} 
-          alt="KDB Logo" 
-          className="h-32 w-auto object-contain mx-auto"
-          crossOrigin="anonymous"
-        />
+      <div className="space-y-1">
+        <h1 className="text-xl font-black uppercase tracking-tight">KENYA DAIRY BOARD - KERICHO</h1>
+        <p className="text-sm font-bold">Ardhi House (Huduma Centre) 5th Floor, Wing B.</p>
+        <p className="text-sm font-bold">Tel: 0717997465 / 0734026367</p>
       </div>
       <div className="w-full border-b-2 border-slate-900 mt-6"></div>
       <h2 className="text-lg font-black mt-6 uppercase">Payment Agreement Form – Consumer Safety Levy Arrears</h2>
     </div>
 
-    <div className="text-sm space-y-6">
+    <div className="space-y-6">
       <p>
-        This Payment Agreement is entered into on this <span className="font-bold border-b border-slate-400 px-2 pb-1 inline-block min-w-[30px] text-center">{new Date(agreement.date).getDate()}</span> day of 
-        <span className="font-bold border-b border-slate-400 px-2 pb-1 inline-block min-w-[80px] text-center">{new Date(agreement.date).toLocaleString('default', { month: 'long' })}</span> 20<span className="font-bold border-b border-slate-400 px-1 pb-1 inline-block min-w-[30px] text-center">{new Date(agreement.date).getFullYear().toString().slice(-2)}</span> between:
+        This Payment Agreement is entered into on this <span className="font-bold px-1">{new Date(agreement.date).getDate()}</span> day of 
+        <span className="font-bold px-1">{new Date(agreement.date).toLocaleString('default', { month: 'long' })}</span> 20<span className="font-bold px-1">{new Date(agreement.date).getFullYear().toString().slice(-2)}</span> between:
       </p>
 
       <div className="space-y-2">
         <p><span className="font-bold">The Kenya Dairy Board (hereafter referred to as “KDB”)</span>, a state corporation established through an Act of Parliament; The Dairy Industry Act (Cap 336) Laws of Kenya and;</p>
         <div className="pl-4 space-y-2">
-          <p><span className="font-bold">Dairy Business Operator (DBO) Name:</span> <span className="border-b border-slate-400 pb-1 inline-block min-w-[200px]">{agreement.dboName}</span></p>
-          <p><span className="font-bold">Premise Name:</span> <span className="border-b border-slate-400 pb-1 inline-block min-w-[200px]">{agreement.premiseName}</span></p>
-          <p><span className="font-bold">Regulatory Permit No:</span> <span className="border-b border-slate-400 pb-1 inline-block min-w-[200px]">{agreement.permitNo}</span></p>
-          <p><span className="font-bold">Premise Location:</span> <span className="border-b border-slate-400 pb-1 inline-block min-w-[150px]">{agreement.location}</span> | <span className="font-bold">County:</span> <span className="border-b border-slate-400 pb-1 inline-block min-w-[100px]">{agreement.county}</span></p>
-          <p><span className="font-bold">Tel:</span> <span className="border-b border-slate-400 pb-1 inline-block min-w-[150px]">{agreement.tel}</span></p>
+          <p><span className="font-bold">Dairy Business Operator (DBO) Name:</span> <span className="font-bold">{agreement.dboName}</span></p>
+          <p><span className="font-bold">Premise Name:</span> <span className="font-bold">{agreement.premiseName}</span></p>
+          <p><span className="font-bold">Regulatory Permit No:</span> <span className="font-bold">{agreement.permitNo}</span></p>
+          <p><span className="font-bold">Premise Location:</span> <span className="font-bold">{agreement.location}</span> | <span className="font-bold">County:</span> <span className="font-bold">{agreement.county}</span></p>
+          <p><span className="font-bold">Tel:</span> <span className="font-bold">{agreement.tel}</span></p>
         </div>
       </div>
 
@@ -102,7 +99,7 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
         <div className="flex-1 space-y-4">
           <p className="font-black border-b border-slate-900 pb-1">FOR: KENYA DAIRY BOARD</p>
           <div className="space-y-2 min-h-[120px]">
-            <p><span className="text-[10px] font-bold uppercase text-slate-400">Name:</span> <span className="font-bold">{agreement.officialName || '................................'}</span></p>
+            <p><span className="text-[10px] font-bold uppercase text-slate-400">Name:</span> <span className="font-bold">{agreement.officialName || ''}</span></p>
             <p><span className="text-[10px] font-bold uppercase text-slate-400">Title:</span> <span className="font-bold">Accounts Assistant</span></p>
             <div className="py-2 h-20 flex items-center">
               {agreement.officialSignature ? (
@@ -137,7 +134,7 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ agreement, onClose, isHidden }) => {
   if (isHidden) {
     return (
-      <div className="bg-white w-[1000px]">
+      <div className="bg-white w-[1000px] overflow-visible h-auto">
         <AgreementContent agreement={agreement} id="formal-agreement-hidden" />
       </div>
     );

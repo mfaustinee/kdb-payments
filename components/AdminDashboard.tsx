@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types.ts';
 import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, Activity, AlertCircle, ExternalLink, PenTool, Trash } from 'lucide-react';
 import { PDFPreview } from './PDFPreview.tsx';
@@ -19,6 +20,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debtors, staffConfig, isSyncing, onRefresh, onAction, onDeleteAgreement, onDebtorUpdate, onStaffUpdate }) => {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<'reviews' | 'debtors' | 'settings'>('reviews');
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -300,7 +302,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
           <p className="text-slate-500 font-medium mt-1">Operational control for Kericho & Region levy compliance.</p>
         </div>
         <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
-          <button onClick={() => window.location.href = '/'} className="px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center text-emerald-600 hover:bg-emerald-50 mr-2 border border-emerald-100">
+          <button onClick={() => navigate('/')} className="px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center text-emerald-600 hover:bg-emerald-50 mr-2 border border-emerald-100">
             <Globe className="w-4 h-4 mr-2" /> Client Portal
           </button>
           <button onClick={() => setTab('reviews')} className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center ${tab === 'reviews' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
