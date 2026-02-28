@@ -134,7 +134,7 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ agreement, onClose, isHidden }) => {
   if (isHidden) {
     return (
-      <div className="fixed left-[-9999px] top-0 bg-white w-[800px] overflow-visible h-auto">
+      <div className="fixed left-[-9999px] top-0 bg-white w-[1100px] overflow-visible h-auto">
         <AgreementContent agreement={agreement} id="formal-agreement-hidden" />
       </div>
     );
@@ -142,7 +142,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ agreement, onClose, isHi
 
   return (
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-[800px] shadow-2xl rounded-none my-8 animate-in zoom-in-95 duration-300 relative">
+      <div className="bg-white w-full max-w-[1100px] shadow-2xl rounded-none my-8 animate-in zoom-in-95 duration-300 relative">
         {/* UI Controls - Not part of the PDF */}
         <div className="absolute -top-12 right-0 flex space-x-4 print:hidden">
           <button 

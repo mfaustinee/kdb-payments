@@ -21,7 +21,7 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
     });
 
     const targetWidth = 180; // 210mm - 30mm margins
-    const referenceWidth = 800;
+    const referenceWidth = 1100;
     const resolution = 2; // 2x resolution for crispness
     const scale = (targetWidth / referenceWidth) * resolution;
 
