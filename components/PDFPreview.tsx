@@ -16,16 +16,18 @@ interface AgreementContentProps {
 }
 
 const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) => (
-  <div className="px-2 pb-4 text-slate-900 bg-white leading-[1.6] text-[12pt] font-sans text-justify" id={id}>
+  <div className="px-16 pb-12 text-slate-900 bg-white leading-[1.6] text-[12pt] font-sans text-left w-[1024px] box-border" id={id}>
     {/* Header */}
-    <div className="flex flex-col items-center text-center mb-4 pt-0 break-inside-avoid">
-      <div className="space-y-1 w-full">
-        <h1 className="text-3xl font-black uppercase tracking-tight text-center">KENYA DAIRY BOARD - KERICHO</h1>
-        <p className="text-lg font-bold text-center">Ardhi House (Huduma Centre) 5th Floor, Wing B.</p>
-        <p className="text-lg font-bold text-center">Tel: 0717997465 / 0734026367</p>
+    <div className="flex flex-col items-center text-center mb-8 pt-6 break-inside-avoid">
+      <div className="space-y-1 w-full flex flex-col items-center">
+        <h1 className="text-3xl font-black uppercase tracking-tight text-center w-full">KENYA DAIRY BOARD - KERICHO</h1>
+        <p className="text-lg font-bold text-center w-full">Ardhi House (Huduma Centre) 5th Floor, Wing B.</p>
+        <p className="text-lg font-bold text-center w-full">Tel: 0717997465 / 0734026367</p>
       </div>
-      <div className="w-full border-b-2 border-slate-900 mt-2"></div>
-      <h2 className="text-xl font-black mt-4 uppercase underline decoration-2 underline-offset-4 text-center w-full">Payment Agreement Form – Consumer Safety Levy Arrears</h2>
+      <div className="w-full border-b-2 border-slate-900 mt-4"></div>
+      <div className="w-full flex justify-center">
+        <h2 className="text-xl font-black mt-6 uppercase underline decoration-2 underline-offset-4 text-center">Payment Agreement Form – Consumer Safety Levy Arrears</h2>
+      </div>
     </div>
 
     <div className="space-y-6">
@@ -52,28 +54,28 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
       </section>
 
       <section className="break-inside-avoid">
-        <h3 className="font-bold uppercase mb-2 text-left">2. Payment Schedule</h3>
-        <table className="w-full border-collapse border border-slate-800 text-left table-fixed">
+        <h3 className="font-bold uppercase mb-4 text-left">2. Payment Schedule</h3>
+        <table className="w-full border-collapse border border-slate-900 text-left table-fixed">
           <thead>
-            <tr className="bg-slate-50">
-              <th className="border border-slate-800 p-2 w-[12%]">Inst. No.</th>
-              <th className="border border-slate-800 p-2 w-[38%]">CSL Period</th>
-              <th className="border border-slate-800 p-2 w-[28%]">Due Date</th>
-              <th className="border border-slate-800 p-2 w-[22%] text-right">Amount (KES)</th>
+            <tr className="bg-slate-100">
+              <th className="border border-slate-900 p-3 w-[10%] font-black text-center">No.</th>
+              <th className="border border-slate-900 p-3 w-[40%] font-black">CSL Period</th>
+              <th className="border border-slate-900 p-3 w-[25%] font-black">Due Date</th>
+              <th className="border border-slate-900 p-3 w-[25%] font-black text-right">Amount (KES)</th>
             </tr>
           </thead>
           <tbody>
             {agreement.installments.map((inst) => (
-              <tr key={inst.no}>
-                <td className="border border-slate-800 p-2">{inst.no}</td>
-                <td className="border border-slate-800 p-2">{inst.period}</td>
-                <td className="border border-slate-800 p-2 font-bold">{inst.dueDate}</td>
-                <td className="border border-slate-800 p-2 text-right font-bold">{Number(inst.amount).toLocaleString()}</td>
+              <tr key={inst.no} className="break-inside-avoid">
+                <td className="border border-slate-900 p-3 text-center">{inst.no}</td>
+                <td className="border border-slate-900 p-3">{inst.period}</td>
+                <td className="border border-slate-900 p-3 font-bold">{inst.dueDate}</td>
+                <td className="border border-slate-900 p-3 text-right font-bold">{Number(inst.amount).toLocaleString()}</td>
               </tr>
             ))}
-            <tr className="bg-slate-50 font-black">
-              <td colSpan={3} className="border border-slate-800 p-2 text-right">TOTAL ARREARS DUE:</td>
-              <td className="border border-slate-800 p-2 text-right underline underline-offset-2">KES {Number(agreement.totalArrears).toLocaleString()}</td>
+            <tr className="bg-slate-100 font-black">
+              <td colSpan={3} className="border border-slate-900 p-3 text-right">TOTAL ARREARS DUE:</td>
+              <td className="border border-slate-900 p-3 text-right underline underline-offset-4 decoration-2">KES {Number(agreement.totalArrears).toLocaleString()}</td>
             </tr>
           </tbody>
         </table>

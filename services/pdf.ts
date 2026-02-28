@@ -20,7 +20,7 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
       putOnlyUsedFonts: true
     });
 
-    const targetWidth = 180; // 210mm - 30mm margins
+    const targetWidth = 190; // 210mm - 20mm total margins (10mm each side)
     const referenceWidth = 1024;
     const scale = (targetWidth / referenceWidth);
 
@@ -28,12 +28,12 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
       callback: function (doc) {
         doc.save(`KDB_Agreement_${agreement.dboName.replace(/\s+/g, '_')}.pdf`);
       },
-      x: 15,
-      y: 5,
+      x: 10,
+      y: 10,
       width: targetWidth,
       windowWidth: referenceWidth,
       autoPaging: 'text',
-      margin: [5, 15, 5, 15],
+      margin: [10, 10, 10, 10],
       html2canvas: {
         scale: scale,
         useCORS: true,
@@ -42,7 +42,8 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
         allowTaint: false,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: referenceWidth
+        windowWidth: referenceWidth,
+        width: referenceWidth
       }
     });
 

@@ -183,7 +183,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
       {/* Hidden PDF Generation Container - Moved off-screen but kept in layout for html2canvas */}
-      <div style={{ position: 'fixed', top: 0, left: '-9999px', width: '1024px', zIndex: -1000 }}>
+      <div style={{ position: 'fixed', top: 0, left: '-9999px', width: '1024px', zIndex: -1000, overflow: 'hidden' }}>
         {selectedReview && (
           <PDFPreview agreement={selectedReview} onClose={() => {}} isHidden />
         )}
