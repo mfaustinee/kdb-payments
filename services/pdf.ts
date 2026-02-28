@@ -20,19 +20,16 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
       putOnlyUsedFonts: true
     });
 
-    // Set font to Times (standard PDF font for Times New Roman)
-    pdf.setFont('times', 'normal');
-
     await pdf.html(element, {
       callback: function (doc) {
         doc.save(`KDB_Agreement_${agreement.dboName.replace(/\s+/g, '_')}.pdf`);
       },
       x: 15,
-      y: 15,
+      y: 0,
       width: 180, // A4 width (210) - margins (15+15)
       windowWidth: 1000, // Reference width for scaling
       autoPaging: 'text',
-      margin: [15, 15, 15, 15],
+      margin: [0, 15, 15, 15],
       html2canvas: {
         scale: 0.18, // Adjusted scale for 1000px -> 180mm
         useCORS: true,

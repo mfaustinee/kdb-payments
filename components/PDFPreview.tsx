@@ -16,16 +16,16 @@ interface AgreementContentProps {
 }
 
 const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) => (
-  <div className="px-4 pt-0 pb-32 text-slate-900 bg-white min-h-[1200px] leading-[1.6] text-[12pt] font-serif text-justify" id={id}>
+  <div className="px-4 pt-0 pb-32 text-slate-900 bg-white min-h-[1200px] leading-[1.6] text-[12pt] font-sans text-justify" id={id}>
     {/* Header */}
-    <div className="flex flex-col items-center text-center mb-4">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-black uppercase tracking-tight">KENYA DAIRY BOARD - KERICHO</h1>
-        <p className="text-lg font-bold">Ardhi House (Huduma Centre) 5th Floor, Wing B.</p>
-        <p className="text-lg font-bold">Tel: 0717997465 / 0734026367</p>
+    <div className="flex flex-col items-center text-center mb-4 pt-0">
+      <div className="space-y-1 w-full">
+        <h1 className="text-3xl font-black uppercase tracking-tight text-center">KENYA DAIRY BOARD - KERICHO</h1>
+        <p className="text-lg font-bold text-center">Ardhi House (Huduma Centre) 5th Floor, Wing B.</p>
+        <p className="text-lg font-bold text-center">Tel: 0717997465 / 0734026367</p>
       </div>
       <div className="w-full border-b-2 border-slate-900 mt-2"></div>
-      <h2 className="text-xl font-black mt-4 uppercase underline decoration-2 underline-offset-4">Payment Agreement Form – Consumer Safety Levy Arrears</h2>
+      <h2 className="text-xl font-black mt-4 uppercase underline decoration-2 underline-offset-4 text-center w-full">Payment Agreement Form – Consumer Safety Levy Arrears</h2>
     </div>
 
     <div className="space-y-6">
