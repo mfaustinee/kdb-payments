@@ -78,4 +78,13 @@ body {
   .print\:hidden { display: none !important; }
   .print\:p-8 { padding: 2rem !important; }
   body { background: white; }
+  .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+
+.break-inside-avoid {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
