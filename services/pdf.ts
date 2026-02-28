@@ -27,14 +27,14 @@ export const downloadAgreementPDF = async (agreement: AgreementData, elementId: 
       callback: function (doc) {
         doc.save(`KDB_Agreement_${agreement.dboName.replace(/\s+/g, '_')}.pdf`);
       },
-      x: 0,
-      y: 0,
-      width: 210, // A4 width in mm
-      windowWidth: 1000, // Match the width we use in the component
-      autoPaging: 'text', // Better for text documents
-      margin: [20, 20, 20, 20], // [top, left, bottom, right]
+      x: 15,
+      y: 15,
+      width: 180, // A4 width (210) - margins (15+15)
+      windowWidth: 1000, // Reference width for scaling
+      autoPaging: 'text',
+      margin: [15, 15, 15, 15],
       html2canvas: {
-        scale: 0.21, // Scale 1000px down to 210mm (approx)
+        scale: 0.18, // Adjusted scale for 1000px -> 180mm
         useCORS: true,
         logging: false,
         letterRendering: true,

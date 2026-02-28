@@ -16,7 +16,7 @@ interface AgreementContentProps {
 }
 
 const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) => (
-  <div className="px-16 pt-0 pb-32 text-slate-900 bg-white min-h-[1200px] leading-[1.6] text-[12pt] font-serif" id={id}>
+  <div className="px-4 pt-0 pb-32 text-slate-900 bg-white min-h-[1200px] leading-[1.6] text-[12pt] font-serif text-justify" id={id}>
     {/* Header */}
     <div className="flex flex-col items-center text-center mb-4">
       <div className="space-y-1">
@@ -48,17 +48,17 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
       <section className="break-inside-avoid">
         <h3 className="font-bold uppercase mb-2">1. Purpose of Agreement</h3>
         <p>This agreement outlines the payment schedule for outstanding, undisputed levy arrears amounting to Kenya Shillings <span className="font-bold">{agreement.totalArrearsWords}</span> (KES <span className="font-bold">{agreement.totalArrears.toLocaleString()}</span>) owed by the above-named operator for the period of <span className="font-bold">{agreement.arrearsPeriod}</span>.</p>
-        <p className="mt-2"><span className="font-bold">Debit Note No:</span> {agreement.debitNoteNo}</p>
+        <p className="mt-2 text-left"><span className="font-bold">Debit Note No:</span> {agreement.debitNoteNo}</p>
       </section>
 
       <section className="break-inside-avoid">
-        <h3 className="font-bold uppercase mb-2">2. Payment Schedule</h3>
-        <table className="w-full border-collapse border border-slate-800">
+        <h3 className="font-bold uppercase mb-2 text-left">2. Payment Schedule</h3>
+        <table className="w-full border-collapse border border-slate-800 text-left">
           <thead>
             <tr className="bg-slate-50">
-              <th className="border border-slate-800 p-2 text-left">Installment No.</th>
-              <th className="border border-slate-800 p-2 text-left">CSL Period</th>
-              <th className="border border-slate-800 p-2 text-left">Agreed Payment Due Date</th>
+              <th className="border border-slate-800 p-2">Installment No.</th>
+              <th className="border border-slate-800 p-2">CSL Period</th>
+              <th className="border border-slate-800 p-2">Agreed Payment Due Date</th>
               <th className="border border-slate-800 p-2 text-right">Amount (KES)</th>
             </tr>
           </thead>
@@ -80,7 +80,7 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
       </section>
 
       <section className="space-y-2">
-        <h3 className="font-bold uppercase mb-2 break-inside-avoid">3. Terms and Conditions</h3>
+        <h3 className="font-bold uppercase mb-2 break-inside-avoid text-left">3. Terms and Conditions</h3>
         <p className="break-inside-avoid">a) The DBO acknowledges, agrees to, and does not dispute the levy amount indicated herein.</p>
         <p className="break-inside-avoid">b) Payments shall be made to the designated KDB Bank Account or via the E-Citizen Collection account as directed by KDB.</p>
         <p className="break-inside-avoid">c) The DBO shall submit proof of each payment immediately upon settlement.</p>
@@ -95,7 +95,7 @@ const AgreementContent: React.FC<AgreementContentProps> = ({ agreement, id }) =>
       </section>
 
       {/* Execution Blocks */}
-      <div className="pt-8 flex justify-between space-x-12 break-inside-avoid">
+      <div className="pt-8 flex justify-between space-x-12 break-inside-avoid text-left">
         <div className="flex-1 space-y-4">
           <p className="font-black border-b border-slate-900 pb-1">FOR: KENYA DAIRY BOARD</p>
           <div className="space-y-2 min-h-[120px]">
