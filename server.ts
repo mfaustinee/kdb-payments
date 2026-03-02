@@ -107,15 +107,41 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", time: new Date().toISOString(), logs: serverLogs.length });
+    let writable = false;
+    try {
+      const testFile = path.join(DATA_DIR, ".health-test");
+      fs.writeFileSync(testFile, "test");
+      fs.unlinkSync(testFile);
+      writable = true;
+    } catch (e) {}
+    
+    res.json({ 
+      status: "ok", 
+      time: new Date().toISOString(), 
+      logs: serverLogs.length,
+      writable,
+      dataDir: DATA_DIR,
+      tmpWritable: fs.existsSync("/tmp")
+    });
   });
 
   app.get("/api/logs", (req, res) => {
     res.send(`<html><body style="background:#111;color:#0f0;font-family:monospace;padding:20px">
-      <h1>Server Logs</h1>
-      <pre>${serverLogs.join('\n')}</pre>
-      <button onclick="location.reload()">Refresh</button>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h1>Server Logs</h1>
+        <div>
+          <button onclick="location.reload()">Refresh</button>
+          <button onclick="fetch('/api/logs/clear', {method:'POST'}).then(()=>location.reload())">Clear Logs</button>
+        </div>
+      </div>
+      <pre style="background:#000;padding:15px;border-radius:8px;border:1px solid #333;overflow:auto;max-height:80vh">${serverLogs.join('\n')}</pre>
     </body></html>`);
+  });
+
+  app.post("/api/logs/clear", (req, res) => {
+    serverLogs.length = 0;
+    addLog("Logs cleared");
+    res.json({ success: true });
   });
 
   app.get("/api/agreements", (req, res) => {
@@ -185,7 +211,24 @@ async function startServer() {
   app.get("/api/debtors", (req, res) => {
     console.log("GET /api/debtors");
     try {
-      const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
+      let data: string = "";
+      if (fs.existsSync(DEBTORS_FILE)) {
+        data = fs.readFileSync(DEBTORS_FILE, "utf-8");
+      }
+      
+      // If primary is empty or missing, check fallback
+      if (!data || data.trim() === '') {
+        const tmpFile = path.join("/tmp", "debtors.json");
+        if (fs.existsSync(tmpFile)) {
+          data = fs.readFileSync(tmpFile, "utf-8");
+          addLog(`Read debtors from fallback: ${tmpFile}`);
+        }
+      }
+      
+      if (!data || data.trim() === '') {
+        return res.json(INITIAL_DEBTORS);
+      }
+      
       res.json(JSON.parse(data));
     } catch (error) {
       console.error("Error reading debtors:", error);
@@ -194,19 +237,42 @@ async function startServer() {
   });
 
   app.post("/api/debtors", (req, res) => {
+    const bodySize = JSON.stringify(req.body).length;
     const count = Array.isArray(req.body) ? req.body.length : 'not an array';
-    addLog(`POST /api/debtors - Count: ${count}`);
+    addLog(`POST /api/debtors - Count: ${count}, Size: ${bodySize} bytes`);
+    
     try {
       if (!req.body || !Array.isArray(req.body)) {
         throw new Error(`Invalid request body: expected array, got ${typeof req.body}`);
       }
+      
       const dataStr = JSON.stringify(req.body, null, 2);
-      fs.writeFileSync(DEBTORS_FILE, dataStr);
-      addLog(`Successfully wrote ${dataStr.length} bytes to debtors.json`);
+      
+      // Try writing to the primary file
+      try {
+        fs.writeFileSync(DEBTORS_FILE, dataStr);
+        addLog(`Successfully wrote to ${DEBTORS_FILE}`);
+      } catch (writeErr: any) {
+        addError(`Failed to write to ${DEBTORS_FILE}`, writeErr);
+        
+        // Fallback to /tmp if primary fails (common in serverless/read-only envs)
+        const tmpFile = path.join("/tmp", "debtors.json");
+        try {
+          fs.writeFileSync(tmpFile, dataStr);
+          addLog(`Successfully wrote to fallback: ${tmpFile}`);
+        } catch (tmpErr: any) {
+          addError(`Failed to write to fallback ${tmpFile}`, tmpErr);
+          throw new Error(`Disk write failed: ${writeErr.message} (Fallback also failed: ${tmpErr.message})`);
+        }
+      }
+      
       res.json({ success: true });
     } catch (error: any) {
       addError("Error saving debtors:", error);
-      res.status(500).json({ error: `Failed to save debtors: ${error.message}` });
+      res.status(500).json({ 
+        error: `Failed to save debtors: ${error.message || 'Unknown error'}`,
+        details: error.stack
+      });
     }
   });
 

@@ -25,6 +25,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadDatabase();
+    
+    // Poll for updates every 60 seconds for cross-device sync
+    const interval = setInterval(() => {
+      if (!isSyncing && !isAdminAuthenticated) { // Don't interrupt admin or active sync
+        loadDatabase();
+      }
+    }, 60000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleAdminAccess = () => {
