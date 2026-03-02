@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types.ts';
-import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, Activity, AlertCircle, ExternalLink, PenTool, Trash } from 'lucide-react';
+import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash } from 'lucide-react';
 import { PDFPreview } from './PDFPreview.tsx';
 import { downloadAgreementPDF } from '../services/pdf.ts';
 import { numberToWords } from '../utils/numberToWords.ts';
@@ -70,11 +70,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
     setNewDebtor({ ...newDebtor, installments: current });
   };
   
-  const envCheck = {
-    supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-    supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-  };
-
   const selectedReview = agreements.find(a => a.id === selectedReviewId);
 
   const handleSignatureUpload = (file: File | null) => {
@@ -590,11 +585,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
       )}
 
       {tab === 'settings' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-in fade-in duration-500">
+        <div className="max-w-2xl mx-auto animate-in fade-in duration-500">
           <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-xl space-y-10">
             <div>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">KDB Execution Setup</h3>
-              <p className="text-sm text-slate-500 font-medium mt-1">Manage your official digital identity and secrets.</p>
+              <p className="text-sm text-slate-500 font-medium mt-1">Manage your official digital identity.</p>
             </div>
             
             <div className="space-y-6">
@@ -620,75 +615,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                         </label>
                     </div>
                 </div>
-
-                <div className="space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Cloud Configuration</h4>
-                    <div className="grid grid-cols-1 gap-4">
-                        <div className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${envCheck.supabaseUrl && envCheck.supabaseKey ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                            <div className="flex items-center space-x-3">
-                                <Activity className={`w-4 h-4 ${envCheck.supabaseUrl ? 'text-emerald-500' : 'text-rose-500'}`} />
-                                <span className={`text-xs font-bold ${envCheck.supabaseUrl ? 'text-emerald-700' : 'text-rose-700'}`}>Supabase DB</span>
-                            </div>
-                            {envCheck.supabaseUrl && envCheck.supabaseKey ? (
-                                <span className="text-[9px] font-black text-emerald-600 bg-white px-2 py-0.5 rounded shadow-sm">CONNECTED</span>
-                            ) : (
-                                <div className="flex items-center space-x-2">
-                                  <AlertCircle className="w-3 h-3 text-rose-500" />
-                                  <span className="text-[9px] font-black text-rose-600 bg-white px-2 py-0.5 rounded shadow-sm uppercase tracking-tight">MISSING URL/KEY</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 p-10 rounded-[40px] shadow-2xl space-y-8 text-white relative overflow-hidden">
-            <div className="absolute -top-10 -right-10 opacity-5"><ShieldCheck className="w-64 h-64" /></div>
-            
-            <div className="flex items-center space-x-3">
-              <div className="bg-emerald-500 p-2 rounded-xl"><Server className="w-5 h-5 text-slate-900" /></div>
-              <h3 className="text-xl font-black uppercase tracking-widest">Go-Live Help</h3>
-            </div>
-            
-            <div className="space-y-4 relative z-10">
-              <div className="p-6 bg-white/5 rounded-3xl border border-white/10 space-y-4">
-                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center">
-                  <Key className="w-4 h-4 mr-2" /> Where is my Supabase URL?
-                </h4>
-                <div className="text-[11px] text-slate-300 leading-relaxed font-medium space-y-2">
-                  <p>1. Log in to <a href="https://supabase.com" target="_blank" className="text-emerald-400 underline">Supabase Dashboard</a></p>
-                  <p>2. Go to <strong>Settings (⚙️)</strong> &gt; <strong>API</strong></p>
-                  <p>3. Copy <strong>Project URL</strong> (This is <code>SUPABASE_URL</code>)</p>
-                  <p>4. Copy <strong>anon public</strong> key (This is <code>SUPABASE_ANON_KEY</code>)</p>
-                </div>
-                <a 
-                  href="https://supabase.com/dashboard/project/_/settings/api" 
-                  target="_blank" 
-                  className="flex items-center justify-center w-full py-2 bg-emerald-500 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-all"
-                >
-                  Open Supabase API Settings <ExternalLink className="w-3 h-3 ml-2" />
-                </a>
-              </div>
-
-              <div className="p-6 bg-white/5 rounded-3xl border border-white/10 space-y-3">
-                 <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest">How to Apply Keys</h4>
-                 <p className="text-[10px] text-slate-400">Add them to your Vercel/Netlify Environment Variables section using these keys:</p>
-                 <div className="grid grid-cols-2 gap-2 text-[9px] font-mono">
-                   <div className="bg-white/10 p-2 rounded">SUPABASE_URL</div>
-                   <div className="bg-white/10 p-2 rounded">SUPABASE_ANON_KEY</div>
-                 </div>
-              </div>
-            </div>
-
-            <div className="bg-emerald-600/10 p-6 rounded-[32px] border border-emerald-500/20">
-                <div className="flex items-center space-x-2 mb-2">
-                    <Lock className="w-3 h-3 text-emerald-400" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">System Security Note</span>
-                </div>
-                <p className="text-[10px] text-slate-300 leading-relaxed font-medium">
-                    Keys are loaded securely from your environment. Never paste them directly into files you commit to public GitHub repositories.
-                </p>
             </div>
           </div>
         </div>

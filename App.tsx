@@ -5,7 +5,7 @@ import { AgreementForm } from './components/AgreementForm.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { SuccessScreen } from './components/SuccessScreen.tsx';
 import { AgreementData, DebtorRecord, ArrearItem, StaffConfig } from './types.ts';
-import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2, LogOut, Lock, Activity, Terminal } from 'lucide-react';
+import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2, LogOut, Lock } from 'lucide-react';
 import { DBService } from './services/db.ts';
 
 const App: React.FC = () => {
@@ -28,50 +28,11 @@ const App: React.FC = () => {
     
     // Poll for updates every 60 seconds for cross-device sync
     const interval = setInterval(() => {
-      if (!isSyncing && !isAdminAuthenticated) { // Don't interrupt admin or active sync
-        loadDatabase();
-      }
+      loadDatabase();
     }, 60000);
     
     return () => clearInterval(interval);
   }, []);
-
-  const addLog = async (msg: string, level: 'info' | 'error' = 'info') => {
-    console.log(`[Client ${level}] ${msg}`);
-    try {
-      await fetch('/api/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, level })
-      });
-    } catch (e) {}
-  };
-
-  const runDiagnostics = async () => {
-    await addLog("Starting diagnostics...");
-    try {
-      const health = await fetch('/api/health').then(r => r.json());
-      await addLog(`Health check: ${JSON.stringify(health)}`);
-      
-      const testPost = await fetch('/api/debtors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ id: 'TEST', dboName: 'Diagnostic Test' }])
-      });
-      await addLog(`Test POST status: ${testPost.status} ${testPost.statusText}`);
-      
-      if (testPost.ok) {
-        alert("Diagnostics passed! POST requests are working.");
-      } else {
-        const text = await testPost.text();
-        await addLog(`Diagnostics failed: ${testPost.status} - ${text}`, 'error');
-        alert(`Diagnostics failed: POST /api/debtors returned ${testPost.status}. Response: ${text.substring(0, 100)}`);
-      }
-    } catch (e: any) {
-      await addLog(`Diagnostics error: ${e.message}`, 'error');
-      alert(`Diagnostics error: ${e.message}`);
-    }
-  };
 
   const handleAdminAccess = () => {
     navigate('/admin');
@@ -189,24 +150,14 @@ const App: React.FC = () => {
   };
 
   const handleDebtorUpdate = async (updated: DebtorRecord[]) => {
-    if (isSyncing) return;
     setIsSyncing(true);
     try {
-      // Check health first
-      try {
-        const health = await fetch('/api/health');
-        if (!health.ok) throw new Error("Server health check failed");
-      } catch (e) {
-        console.warn("Server health check failed, but proceeding anyway:", e);
-      }
-
       await DBService.saveDebtors(updated);
       setDebtors(updated);
       console.log("[App] Debtors updated successfully on server");
     } catch (error: any) {
       console.error("[App] Failed to update debtors:", error);
       const message = error.message || 'Unknown error';
-      addLog(`SAVE FAILED: ${message}`, 'error');
       alert(`SAVE FAILED: ${message}\n\nThis usually happens if the data is too large or the connection was interrupted. Please try again or contact support if the issue persists.`);
       // Re-fetch to sync state with server
       const stored = await DBService.getDebtors();
@@ -271,23 +222,6 @@ const App: React.FC = () => {
                 </button>
               )}
 
-              {isAdminAuthenticated && (
-                <button 
-                  onClick={runDiagnostics}
-                  className="flex items-center px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-600 transition-all"
-                >
-                  <Activity className="w-4 h-4 mr-2" />
-                  Diagnostics
-                </button>
-              )}
-              {isAdminAuthenticated && (
-                <button 
-                  onClick={() => window.open('/api/logs', '_blank')}
-                  className="flex items-center px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-600 transition-all"
-                >
-                  Logs
-                </button>
-              )}
               {isAdminAuthenticated && (
                 <button 
                   onClick={handleAdminLogout}

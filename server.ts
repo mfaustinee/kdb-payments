@@ -13,21 +13,6 @@ const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
 
-// In-memory logs for debugging
-const serverLogs: string[] = [];
-const addLog = (msg: string) => {
-  const log = `[${new Date().toISOString()}] ${msg}`;
-  console.log(log);
-  serverLogs.push(log);
-  if (serverLogs.length > 100) serverLogs.shift();
-};
-const addError = (msg: string, err?: any) => {
-  const log = `[${new Date().toISOString()}] ERROR: ${msg} ${err ? (err.message || JSON.stringify(err)) : ''}`;
-  console.error(log);
-  serverLogs.push(log);
-  if (serverLogs.length > 100) serverLogs.shift();
-};
-
 const INITIAL_DEBTORS = [
   {
     id: 'D001',
@@ -94,12 +79,6 @@ async function startServer() {
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-  // Global request logger
-  app.use((req, res, next) => {
-    addLog(`${req.method} ${req.url}`);
-    next();
-  });
-
   // Error handling middleware for body-parser
   app.use((err: any, req: any, res: any, next: any) => {
     if (err) {
@@ -113,107 +92,52 @@ async function startServer() {
   });
 
   // API Routes
-  app.route("/api/debtors")
-    .get((req, res) => {
-      addLog(`GET /api/debtors`);
-      try {
-        let data: string = "";
-        if (fs.existsSync(DEBTORS_FILE)) {
-          data = fs.readFileSync(DEBTORS_FILE, "utf-8");
-        }
-        if (!data || data.trim() === '') {
-          const tmpFile = path.join("/tmp", "debtors.json");
-          if (fs.existsSync(tmpFile)) {
-            data = fs.readFileSync(tmpFile, "utf-8");
-          }
-        }
-        if (!data || data.trim() === '') return res.json(INITIAL_DEBTORS);
-        res.json(JSON.parse(data));
-      } catch (error) {
-        addError("Error reading debtors:", error);
-        res.status(500).json({ error: "Failed to read debtors" });
-      }
-    })
-    .post((req, res) => {
-      addLog(`POST /api/debtors - Size: ${JSON.stringify(req.body).length} bytes`);
-      try {
-        if (!req.body || !Array.isArray(req.body)) throw new Error("Invalid body");
-        const dataStr = JSON.stringify(req.body, null, 2);
-        try {
-          fs.writeFileSync(DEBTORS_FILE, dataStr);
-        } catch (e) {
-          fs.writeFileSync(path.join("/tmp", "debtors.json"), dataStr);
-        }
-        res.json({ success: true });
-      } catch (error: any) {
-        addError("POST /api/debtors error:", error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-  app.get("/api/health", (req, res) => {
-    let writable = false;
+  app.get("/api/debtors", (req, res) => {
     try {
-      const testFile = path.join(DATA_DIR, ".health-test");
-      fs.writeFileSync(testFile, "test");
-      fs.unlinkSync(testFile);
-      writable = true;
-    } catch (e) {}
-    
-    res.json({ 
-      status: "ok", 
-      time: new Date().toISOString(), 
-      logs: serverLogs.length,
-      writable,
-      dataDir: DATA_DIR,
-      tmpWritable: fs.existsSync("/tmp")
-    });
-  });
-
-  app.get("/api/logs", (req, res) => {
-    res.send(`<html><body style="background:#111;color:#0f0;font-family:monospace;padding:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h1>Server Logs</h1>
-        <div>
-          <button onclick="location.reload()">Refresh</button>
-          <button onclick="fetch('/api/logs/clear', {method:'POST'}).then(()=>location.reload())">Clear Logs</button>
-        </div>
-      </div>
-      <pre style="background:#000;padding:15px;border-radius:8px;border:1px solid #333;overflow:auto;max-height:80vh">${serverLogs.join('\n')}</pre>
-    </body></html>`);
-  });
-
-  app.post("/api/logs/clear", (req, res) => {
-    serverLogs.length = 0;
-    addLog("Logs cleared");
-    res.json({ success: true });
-  });
-
-  app.post("/api/logs", (req, res) => {
-    const { message, level } = req.body;
-    if (level === 'error') {
-      addError(`Client: ${message}`);
-    } else {
-      addLog(`Client: ${message}`);
+      if (fs.existsSync(DEBTORS_FILE)) {
+        const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
+        if (data && data.trim() !== '') {
+          return res.json(JSON.parse(data));
+        }
+      }
+      res.json(INITIAL_DEBTORS);
+    } catch (error) {
+      console.error("Error reading debtors:", error);
+      res.status(500).json({ error: "Failed to read debtors" });
     }
-    res.json({ success: true });
+  });
+
+  app.post("/api/debtors", (req, res) => {
+    try {
+      if (!req.body || !Array.isArray(req.body)) throw new Error("Invalid body");
+      const dataStr = JSON.stringify(req.body, null, 2);
+      console.log(`[Server] Saving ${req.body.length} debtors to ${DEBTORS_FILE} (${dataStr.length} bytes)`);
+      fs.writeFileSync(DEBTORS_FILE, dataStr);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("POST /api/debtors error:", error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get("/api/agreements", (req, res) => {
-    addLog("GET /api/agreements");
     try {
-      const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
-      res.json(JSON.parse(data));
+      if (fs.existsSync(AGREEMENTS_FILE)) {
+        const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
+        return res.json(JSON.parse(data));
+      }
+      res.json([]);
     } catch (error) {
-      addError("Error reading agreements:", error);
+      console.error("Error reading agreements:", error);
       res.status(500).json({ error: "Failed to read agreements" });
     }
   });
 
   app.post("/api/agreements", (req, res) => {
-    addLog(`POST /api/agreements - ID: ${req.body?.id}`);
     try {
-      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const agreements = fs.existsSync(AGREEMENTS_FILE) 
+        ? JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"))
+        : [];
       const newAgreement = req.body;
       
       const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
@@ -226,7 +150,7 @@ async function startServer() {
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
       res.json({ success: true });
     } catch (error) {
-      addError("Error saving agreement:", error);
+      console.error("Error saving agreement:", error);
       res.status(500).json({ error: "Failed to save agreement" });
     }
   });
@@ -283,7 +207,6 @@ async function startServer() {
 
   // API Catch-all
   app.all("/api/*", (req, res) => {
-    addLog(`API 404/405 Fallthrough: ${req.method} ${req.url}`);
     res.status(404).json({ error: `API endpoint ${req.method} ${req.url} not found or method not allowed` });
   });
 
