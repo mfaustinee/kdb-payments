@@ -25,13 +25,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadDatabase();
-    
-    // Poll for updates every 60 seconds for cross-device sync
-    const interval = setInterval(() => {
-      loadDatabase();
-    }, 60000);
-    
-    return () => clearInterval(interval);
   }, []);
 
   const handleAdminAccess = () => {
@@ -81,15 +74,37 @@ const App: React.FC = () => {
       setUnreadCount(uniqueAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
       setStaffConfig(storedStaff);
 
-      if (storedDebtors) {
-        console.log(`[App] Loaded ${storedDebtors.length} debtors from server`);
+      if (storedDebtors.length > 0) {
         const uniqueDebtors = Array.from(new Map(storedDebtors.map(d => [d.id, d])).values());
         setDebtors(uniqueDebtors);
+      } else {
+        const initialDebtors: DebtorRecord[] = [
+          {
+            id: 'D001',
+            dboName: 'Sunrise Dairy Ltd',
+            premiseName: 'Sunrise Main Depot',
+            permitNo: 'KDB/MB/0001/0001234/2024',
+            location: 'Thika Road, Ruiru',
+            county: 'Kiambu',
+            arrearsBreakdown: [{ id: '1', month: 'January 2024', amount: 150000 }],
+            totalArrears: 150000,
+            totalArrearsWords: 'One Hundred and Fifty Thousand Shillings',
+            arrearsPeriod: 'Jan 2024',
+            debitNoteNo: 'DN/2024/552',
+            tel: '0712345678',
+            installments: [{ no: 1, period: 'Jan 2024', dueDate: '', amount: 150000 }]
+          }
+        ];
+        setDebtors(initialDebtors);
+        await DBService.saveDebtors(initialDebtors);
       }
+    } catch (error) {
+      console.error("[App] Failed to load database:", error);
     } finally {
       setTimeout(() => setIsSyncing(false), 500);
     }
   };
+
 
   const handleClientSubmit = async (data: AgreementData) => {
     setIsSyncing(true);
@@ -150,21 +165,8 @@ const App: React.FC = () => {
   };
 
   const handleDebtorUpdate = async (updated: DebtorRecord[]) => {
-    setIsSyncing(true);
-    try {
-      await DBService.saveDebtors(updated);
-      setDebtors(updated);
-      console.log("[App] Debtors updated successfully on server");
-    } catch (error: any) {
-      console.error("[App] Failed to update debtors:", error);
-      const message = error.message || 'Unknown error';
-      alert(`SAVE FAILED: ${message}\n\nThis usually happens if the data is too large or the connection was interrupted. Please try again or contact support if the issue persists.`);
-      // Re-fetch to sync state with server
-      const stored = await DBService.getDebtors();
-      setDebtors(stored);
-    } finally {
-      setIsSyncing(false);
-    }
+    setDebtors(updated);
+    await DBService.saveDebtors(updated);
   };
 
   const handleStaffUpdate = async (config: StaffConfig) => {
