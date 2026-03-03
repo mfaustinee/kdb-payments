@@ -166,14 +166,14 @@ const App: React.FC = () => {
               <div className="hidden sm:block">
                 <div className="flex items-center space-x-2">
                   <span className="font-black text-xs uppercase tracking-widest text-slate-800">KDB Payments</span>
-                  <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full border ${isSyncing ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                  <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full border ${isSyncing ? 'bg-amber-50 border-amber-100' : (DBService.isCloudEnabled() ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200')}`}>
                     {isSyncing ? (
                       <Loader2 className="w-2.5 h-2.5 text-amber-500 animate-spin" />
                     ) : (
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${DBService.isCloudEnabled() ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
                     )}
-                    <span className={`text-[9px] font-black uppercase tracking-tight ${isSyncing ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {isSyncing ? 'Syncing...' : 'Connected'}
+                    <span className={`text-[9px] font-black uppercase tracking-tight ${isSyncing ? 'text-amber-600' : (DBService.isCloudEnabled() ? 'text-emerald-600' : 'text-slate-500')}`}>
+                      {isSyncing ? 'Syncing...' : (DBService.isCloudEnabled() ? 'Cloud Active' : 'Local Only')}
                     </span>
                   </div>
                 </div>

@@ -8,21 +8,27 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let supabase: SupabaseClient | null = null;
+let isSupabaseConnected = false;
 
 if (supabaseUrl && supabaseKey) {
   try {
     supabase = createClient(supabaseUrl, supabaseKey);
     console.log("[DBService] Supabase initialized");
+    isSupabaseConnected = true;
   } catch (e) {
     console.error("[DBService] Failed to initialize Supabase:", e);
   }
 }
 
 export const DBService = {
+  isCloudEnabled(): boolean {
+    return isSupabaseConnected && !!supabase;
+  },
+
   async getAgreements(): Promise<AgreementData[]> {
     let agreements: AgreementData[] = [];
 
-    // 1. Try Local API first (Source of Truth for this session)
+    // 1. Try Local API first (Fastest for current session)
     try {
       const response = await fetch(`${API_BASE}/agreements?t=${Date.now()}`);
       if (response.ok) {
@@ -35,36 +41,26 @@ export const DBService = {
       if (local) agreements = JSON.parse(local);
     }
 
-    // 2. If local is empty and Supabase is available, try Supabase
-    if (agreements.length === 0) {
-      // Try localStorage fallback first if local API returned nothing
-      const local = localStorage.getItem('kdb_agreements_fallback');
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (parsed.length > 0) {
-          agreements = parsed;
-          console.log("[DBService] Restored agreements from localStorage");
-          // Try to sync this back to the server
-          this.syncAgreementsToLocal(agreements);
-        }
-      }
-
-      // Then try Supabase if still empty
-      if (agreements.length === 0 && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('agreements')
-            .select('*')
-            .order('submittedAt', { ascending: false });
-          
-          if (!error && data && data.length > 0) {
+    // 2. If Cloud is enabled, always try to fetch latest from Cloud to sync across devices
+    if (this.isCloudEnabled()) {
+      try {
+        const { data, error } = await supabase!
+          .from('agreements')
+          .select('*')
+          .order('submittedAt', { ascending: false });
+        
+        if (!error && data) {
+          // Merge or replace? For agreements, Cloud is the ultimate source of truth for multi-device
+          if (data.length > 0) {
             agreements = data as AgreementData[];
-            console.log("[DBService] Restored agreements from Supabase");
+            console.log(`[DBService] Synced ${agreements.length} agreements from Cloud`);
+            // Update local cache
             this.syncAgreementsToLocal(agreements);
+            localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
           }
-        } catch (error) {
-          console.error("[DBService] Supabase getAgreements error:", error);
         }
+      } catch (error) {
+        console.error("[DBService] Cloud sync error:", error);
       }
     }
 
@@ -209,21 +205,22 @@ export const DBService = {
       if (local) debtors = JSON.parse(local);
     }
 
-    // 2. Supabase fallback
-    if (debtors.length <= 1 && supabase) { // <= 1 because initial debtor is always there
+    // 2. Cloud Sync (Ultimate source of truth for multi-device)
+    if (this.isCloudEnabled()) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
           .from('debtors')
           .select('*')
           .order('dboName', { ascending: true });
         
         if (!error && data && data.length > 0) {
           debtors = data as DebtorRecord[];
-          console.log("[DBService] Restored debtors from Supabase");
-          this.saveDebtors(debtors); // Sync to local
+          console.log(`[DBService] Synced ${debtors.length} debtors from Cloud`);
+          // Sync back to local server so it's available offline/fast
+          this.saveDebtors(debtors); 
         }
       } catch (error) {
-        console.error("[DBService] Supabase getDebtors error:", error);
+        console.error("[DBService] Cloud getDebtors error:", error);
       }
     }
 
