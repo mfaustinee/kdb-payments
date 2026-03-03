@@ -148,10 +148,25 @@ async function startServer() {
       }
       
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+      console.log(`[Server] Saved agreement ${newAgreement.id}. Total: ${agreements.length}`);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error saving agreement:", error);
+      console.error("[Server] Error saving agreement:", error);
       res.status(500).json({ error: "Failed to save agreement" });
+    }
+  });
+
+  app.post("/api/agreements/sync", (req, res) => {
+    try {
+      const agreements = req.body;
+      if (!Array.isArray(agreements)) throw new Error("Invalid data format: expected array");
+      
+      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+      console.log(`[Server] Synced ${agreements.length} agreements from cloud to ${AGREEMENTS_FILE}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Server] Sync agreements error:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -202,6 +217,22 @@ async function startServer() {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save staff config" });
+    }
+  });
+
+  app.get("/api/status", (req, res) => {
+    try {
+      const agreements = fs.existsSync(AGREEMENTS_FILE) ? JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8")) : [];
+      const debtors = fs.existsSync(DEBTORS_FILE) ? JSON.parse(fs.readFileSync(DEBTORS_FILE, "utf-8")) : [];
+      res.json({
+        agreementsCount: agreements.length,
+        debtorsCount: debtors.length,
+        agreementsFile: AGREEMENTS_FILE,
+        debtorsFile: DEBTORS_FILE,
+        writable: fs.accessSync(DATA_DIR, fs.constants.W_OK) === undefined
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

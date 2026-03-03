@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types.ts';
-import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash } from 'lucide-react';
+import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity } from 'lucide-react';
 import { PDFPreview } from './PDFPreview.tsx';
 import { downloadAgreementPDF } from '../services/pdf.ts';
 import { numberToWords } from '../utils/numberToWords.ts';
@@ -182,6 +182,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const handleDownloadPDF = async () => {
     if (!selectedReview) return;
     await downloadAgreementPDF(selectedReview, 'formal-agreement-hidden');
+  };
+
+  const envCheck = {
+    supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+    supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
   };
 
   return (
@@ -593,6 +598,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
             </div>
             
             <div className="space-y-6">
+                <div className={`p-6 rounded-[32px] border flex items-center justify-between transition-all ${envCheck.supabaseUrl && envCheck.supabaseKey ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                    <div className="flex items-center space-x-3">
+                        <Activity className={`w-5 h-5 ${envCheck.supabaseUrl ? 'text-emerald-500' : 'text-rose-500'}`} />
+                        <div>
+                          <span className={`text-xs font-bold block ${envCheck.supabaseUrl ? 'text-emerald-700' : 'text-rose-700'}`}>Cloud Persistence</span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Supabase Integration Status</span>
+                        </div>
+                    </div>
+                    {envCheck.supabaseUrl && envCheck.supabaseKey ? (
+                        <div className="flex items-center space-x-3">
+                          <button 
+                            onClick={async () => {
+                              try {
+                                const { DBService } = await import('../services/db.ts');
+                                await DBService.forceSync();
+                                alert("Cloud sync complete. Refreshing...");
+                                onRefresh?.();
+                              } catch (e: any) {
+                                alert("Sync failed: " + e.message);
+                              }
+                            }}
+                            className="text-[10px] font-black text-emerald-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-50 border border-emerald-100 transition-all active:scale-95"
+                          >
+                            FORCE SYNC FROM CLOUD
+                          </button>
+                          <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CONNECTED</span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center space-x-2">
+                          <AlertCircle className="w-4 h-4 text-rose-500" />
+                          <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">OFFLINE MODE</span>
+                        </div>
+                    )}
+                </div>
+
                 <div className="flex flex-col sm:flex-row items-center gap-8 bg-slate-50 p-8 rounded-[32px] border border-slate-100">
                     <div className="w-40 h-28 bg-white rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden shadow-inner group relative">
                         {staffConfig.officialSignature ? (
