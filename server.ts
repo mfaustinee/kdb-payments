@@ -111,6 +111,14 @@ async function startServer() {
   });
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      time: new Date().toISOString(),
+      writable: fs.existsSync(DATA_DIR) 
+    });
+  });
+
   app.get("/api/debtors", (req, res) => {
     try {
       if (fs.existsSync(DEBTORS_FILE)) {

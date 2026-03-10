@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState(false);
 
   useEffect(() => {
+    console.log("[App] Version 1.0.5 - Initializing...");
     loadDatabase();
   }, []);
 
@@ -106,7 +107,8 @@ const App: React.FC = () => {
       navigate('/success');
     } catch (error: any) {
       console.error("Submission failed:", error);
-      alert(`Submission failed: ${error.message || "Please check your connection and try again."}`);
+      const msg = error.message || String(error);
+      alert(`SUBMISSION ERROR:\n\n${msg}\n\nTechnical Details: Check the browser console (F12) for more information.`);
     } finally {
       setIsSyncing(false);
     }

@@ -34,9 +34,11 @@ export const DBService = {
       if (response.ok) {
         agreements = await response.json();
         localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      } else {
+        console.warn(`[DBService] Local API getAgreements returned ${response.status}`);
       }
     } catch (error) {
-      console.error("[DBService] Local API getAgreements error:", error);
+      console.error("[DBService] Local API getAgreements network error:", error);
       const local = localStorage.getItem('kdb_agreements_fallback');
       if (local) agreements = JSON.parse(local);
     }
@@ -49,15 +51,14 @@ export const DBService = {
           .select('*')
           .order('submittedAt', { ascending: false });
         
-        if (!error && data) {
-          // Merge or replace? For agreements, Cloud is the ultimate source of truth for multi-device
-          if (data.length > 0) {
-            agreements = data as AgreementData[];
-            console.log(`[DBService] Synced ${agreements.length} agreements from Cloud`);
-            // Update local cache
-            this.syncAgreementsToLocal(agreements);
-            localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
-          }
+        if (error) {
+          console.error("[DBService] Supabase getAgreements error:", error.message);
+        } else if (data && data.length > 0) {
+          agreements = data as AgreementData[];
+          console.log(`[DBService] Synced ${agreements.length} agreements from Cloud`);
+          // Update local cache in background
+          this.syncAgreementsToLocal(agreements).catch(e => console.error("[DBService] Background sync to local failed:", e));
+          localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
         }
       } catch (error) {
         console.error("[DBService] Cloud sync error:", error);
@@ -103,28 +104,46 @@ export const DBService = {
   async saveAgreement(agreement: AgreementData): Promise<void> {
     // 1. Local API first (Immediate)
     try {
+      console.log(`[DBService] Attempting to save agreement ${agreement.id} locally...`);
       const response = await fetch(`${API_BASE}/agreements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agreement)
       });
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to save agreement locally (HTTP ${response.status})`);
+        let errorMsg = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {
+          // Not JSON
+        }
+        throw new Error(errorMsg);
       }
       
-      const agreements = await this.getAgreements();
+      console.log("[DBService] Local save successful");
+      
+      // Update local fallback immediately without waiting for full getAgreements
+      const local = localStorage.getItem('kdb_agreements_fallback');
+      let agreements = local ? JSON.parse(local) : [];
+      const index = agreements.findIndex((a: any) => a.id === agreement.id);
+      if (index !== -1) agreements[index] = agreement;
+      else agreements.push(agreement);
       localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      
     } catch (error: any) {
       console.error("[DBService] Local API saveAgreement error:", error);
-      throw error;
+      throw new Error(`Local save failed: ${error.message || "Connection error"}`);
     }
 
     // 2. Supabase in background
-    if (supabase) {
-      supabase.from('agreements').upsert(agreement).then(({ error }) => {
-        if (error) console.error("[DBService] Supabase saveAgreement background error:", error);
-      });
+    if (this.isCloudEnabled()) {
+      console.log("[DBService] Syncing to cloud in background...");
+      supabase!.from('agreements').upsert(agreement).then(({ error }) => {
+        if (error) console.error("[DBService] Supabase saveAgreement background error:", error.message);
+        else console.log("[DBService] Cloud sync successful");
+      }).catch(e => console.error("[DBService] Supabase background exception:", e));
     }
   },
 
