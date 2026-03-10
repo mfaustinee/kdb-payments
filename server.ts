@@ -159,10 +159,21 @@ async function startServer() {
 
   app.post("/api/agreements", (req, res) => {
     try {
-      const agreements = fs.existsSync(AGREEMENTS_FILE) 
-        ? JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"))
-        : [];
+      let agreements = [];
+      if (fs.existsSync(AGREEMENTS_FILE)) {
+        const content = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
+        try {
+          agreements = content ? JSON.parse(content) : [];
+        } catch (e) {
+          console.error("[Server] Corrupted agreements.json, resetting to empty array");
+          agreements = [];
+        }
+      }
+      
       const newAgreement = req.body;
+      if (!newAgreement || !newAgreement.id) {
+        return res.status(400).json({ error: "Invalid agreement data: missing ID" });
+      }
       
       const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
       if (index !== -1) {
@@ -172,11 +183,11 @@ async function startServer() {
       }
       
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-      console.log(`[Server] Saved agreement ${newAgreement.id}. Total: ${agreements.length}`);
+      console.log(`[Server] Saved agreement ${newAgreement.id}. Total agreements: ${agreements.length}`);
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Server] Error saving agreement:", error);
-      res.status(500).json({ error: "Failed to save agreement" });
+      res.status(500).json({ error: `Failed to save agreement: ${error.message}` });
     }
   });
 

@@ -104,9 +104,9 @@ const App: React.FC = () => {
       
       setCurrentAgreement(data);
       navigate('/success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Submission failed:", error);
-      alert("Submission failed. Please check your connection and try again.");
+      alert(`Submission failed: ${error.message || "Please check your connection and try again."}`);
     } finally {
       setIsSyncing(false);
     }

@@ -108,11 +108,14 @@ export const DBService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agreement)
       });
-      if (!response.ok) throw new Error('Failed to save agreement locally');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Failed to save agreement locally (HTTP ${response.status})`);
+      }
       
       const agreements = await this.getAgreements();
       localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DBService] Local API saveAgreement error:", error);
       throw error;
     }
