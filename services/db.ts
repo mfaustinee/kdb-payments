@@ -140,43 +140,66 @@ export const DBService = {
     // 2. Supabase in background
     if (this.isCloudEnabled()) {
       console.log("[DBService] Syncing to cloud in background...");
-      supabase!.from('agreements').upsert(agreement).then(({ error }) => {
-        if (error) console.error("[DBService] Supabase saveAgreement background error:", error.message);
-        else console.log("[DBService] Cloud sync successful");
-      }).catch(e => console.error("[DBService] Supabase background exception:", e));
+      (async () => {
+        try {
+          const { error } = await supabase!.from('agreements').upsert(agreement);
+          if (error) console.error("[DBService] Supabase saveAgreement background error:", error.message);
+          else console.log("[DBService] Cloud sync successful");
+        } catch (e) {
+          console.error("[DBService] Supabase background exception:", e);
+        }
+      })();
     }
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
-    // 1. Try Supabase first
-    if (supabase) {
-      try {
-        const { error } = await supabase
-          .from('agreements')
-          .update(updates)
-          .eq('id', id);
-        
-        if (error) throw error;
-      } catch (error) {
-        console.error("[DBService] Supabase updateAgreement error:", error);
-      }
-    }
-
-    // 2. Local API
+    // 1. Local API first (Immediate)
     try {
+      console.log(`[DBService] Attempting to update agreement ${id} locally...`);
       const response = await fetch(`${API_BASE}/agreements/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
       });
-      if (!response.ok) throw new Error('Failed to update agreement');
       
-      // Update local fallback
-      const agreements = await this.getAgreements();
-      localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
-    } catch (error) {
+      if (!response.ok) {
+        let errorMsg = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {}
+        throw new Error(errorMsg);
+      }
+      
+      console.log("[DBService] Local update successful");
+      
+      // Update local fallback immediately
+      const local = localStorage.getItem('kdb_agreements_fallback');
+      if (local) {
+        let agreements = JSON.parse(local);
+        const index = agreements.findIndex((a: any) => a.id === id);
+        if (index !== -1) {
+          agreements[index] = { ...agreements[index], ...updates };
+          localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+        }
+      }
+    } catch (error: any) {
       console.error("[DBService] Local API updateAgreement error:", error);
-      throw error;
+      throw new Error(`Local update failed: ${error.message || "Connection error"}`);
+    }
+
+    // 2. Supabase in background
+    if (this.isCloudEnabled()) {
+      console.log("[DBService] Syncing update to cloud in background...");
+      (async () => {
+        try {
+          const { error } = await supabase!.from('agreements').update(updates).eq('id', id);
+          if (error) console.error("[DBService] Supabase updateAgreement background error:", error.message);
+          else console.log("[DBService] Cloud update sync successful");
+        } catch (e) {
+          console.error("[DBService] Supabase update background exception:", e);
+        }
+      })();
     }
   },
 

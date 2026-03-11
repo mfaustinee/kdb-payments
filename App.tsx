@@ -91,7 +91,7 @@ const App: React.FC = () => {
     try {
       const submission = { ...data, submittedAt: new Date().toISOString() };
       
-      // Check if it's an update (resubmission request)
+      // 1. Save locally (Blocking)
       const existing = agreements.find(a => a.id === data.id);
       if (existing) {
         await DBService.updateAgreement(data.id, submission);
@@ -99,12 +99,34 @@ const App: React.FC = () => {
         await DBService.saveAgreement(submission);
       }
       
-      const updated = await DBService.getAgreements();
-      setAgreements(updated);
-      setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      // 2. Update local state immediately (Optimistic)
+      setAgreements(prev => {
+        const index = prev.findIndex(a => a.id === data.id);
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = submission;
+          return updated;
+        }
+        return [submission, ...prev];
+      });
       
-      setCurrentAgreement(data);
+      setUnreadCount(prev => {
+        const isNew = !existing;
+        if (isNew) return prev + 1;
+        return prev;
+      });
+      
+      setCurrentAgreement(submission);
+      
+      // 3. Navigate immediately
       navigate('/success');
+      
+      // 4. Trigger background sync (Non-blocking)
+      DBService.getAgreements().then(updated => {
+        setAgreements(updated);
+        setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      }).catch(e => console.error("[App] Background sync failed:", e));
+
     } catch (error: any) {
       console.error("Submission failed:", error);
       const msg = error.message || String(error);
@@ -116,17 +138,37 @@ const App: React.FC = () => {
 
   const handleAdminAction = async (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => {
     setIsSyncing(true);
-    const updates: Partial<AgreementData> = action === 'approve' 
-      ? { status: 'approved', officialSignature: adminData?.signature, officialName: adminData?.name, approvedAt: new Date().toISOString() }
-      : { status: 'rejected', rejectionReason: adminData?.reason };
+    try {
+      const updates: Partial<AgreementData> = action === 'approve' 
+        ? { status: 'approved', officialSignature: adminData?.signature, officialName: adminData?.name, approvedAt: new Date().toISOString() }
+        : { status: 'rejected', rejectionReason: adminData?.reason };
 
-    await DBService.updateAgreement(id, updates);
-    
-    const updated = await DBService.getAgreements();
-    
-    setAgreements(updated);
-    setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
-    setIsSyncing(false);
+      // 1. Update locally
+      await DBService.updateAgreement(id, updates);
+      
+      // 2. Update local state immediately
+      setAgreements(prev => {
+        const index = prev.findIndex(a => a.id === id);
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...updates };
+          return updated;
+        }
+        return prev;
+      });
+      
+      // 3. Trigger background sync
+      DBService.getAgreements().then(updated => {
+        setAgreements(updated);
+        setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      }).catch(e => console.error("[App] Admin background sync failed:", e));
+
+    } catch (error) {
+      console.error("[App] Admin action failed:", error);
+      alert("Action failed. Please try again.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleDeleteAgreement = async (id: string) => {
