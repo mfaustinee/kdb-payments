@@ -8,10 +8,34 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.join(process.cwd(), "data");
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+let DATA_DIR = path.join(process.cwd(), "data");
+
+// Resilient data directory selection
+const tryDataDir = (dir: string) => {
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const testFile = path.join(dir, ".write-test-" + Date.now());
+    fs.writeFileSync(testFile, "test");
+    fs.unlinkSync(testFile);
+    return true;
+  } catch (e) {
+    console.error(`[Server] Directory ${dir} is not writable:`, e);
+    return false;
+  }
+};
+
+if (!tryDataDir(DATA_DIR)) {
+  const fallbackDir = path.join("/tmp", "kdb-data");
+  console.warn(`[Server] Falling back to writable directory: ${fallbackDir}`);
+  DATA_DIR = fallbackDir;
+  if (!tryDataDir(DATA_DIR)) {
+    console.error("[Server] CRITICAL: No writable data directory found!");
+  }
 }
+
+console.log(`[Server] Active data directory: ${DATA_DIR}`);
 
 const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
@@ -37,6 +61,7 @@ const INITIAL_DEBTORS = [
 
 const ensureFile = (file: string, defaultData: any) => {
   if (!fs.existsSync(file)) {
+    console.log(`[Server] Creating ${file} with initial data`);
     fs.writeFileSync(file, JSON.stringify(defaultData, null, 2));
   }
 };
@@ -49,72 +74,166 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors());
-  app.use(express.json({ limit: '50mb' }));
+  // Improved CORS configuration
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  }));
+  app.options('*', cors()); 
+  
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
+  // Detailed request logging
+  app.use((req, res, next) => {
+    console.log(`[Server] ${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 
   // API Routes
-  app.get("/api/agreements", (req, res) => {
-    const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
-    res.json(JSON.parse(data));
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      time: new Date().toISOString(),
+      writable: fs.existsSync(DATA_DIR) 
+    });
   });
 
-  app.post("/api/agreements", (req, res) => {
-    const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
-    const newAgreement = req.body;
-    const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
-    if (index !== -1) agreements[index] = newAgreement;
-    else agreements.push(newAgreement);
-    fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-    res.json({ success: true });
-  });
-
-  app.patch("/api/agreements/:id", (req, res) => {
-    const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
-    const { id } = req.params;
-    const index = agreements.findIndex((a: any) => a.id === id);
-    if (index !== -1) {
-      agreements[index] = { ...agreements[index], ...req.body };
-      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-      res.json({ success: true });
-    } else {
-      res.status(404).json({ error: "Not found" });
+  app.get(["/api/agreements", "/api/agreements/"], (req, res) => {
+    try {
+      const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
+      res.json(JSON.parse(data));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to read agreements" });
     }
   });
 
-  app.delete("/api/agreements/:id", (req, res) => {
-    const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
-    const { id } = req.params;
-    const filtered = agreements.filter((a: any) => a.id !== id);
-    fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(filtered, null, 2));
-    res.json({ success: true });
+  app.post(["/api/agreements", "/api/agreements/"], (req, res) => {
+    try {
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const newAgreement = req.body;
+      const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
+      if (index !== -1) agreements[index] = newAgreement;
+      else agreements.push(newAgreement);
+      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save agreement" });
+    }
   });
 
-  app.post("/api/agreements/sync", (req, res) => {
-    fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
+  const handleUpdate = (req: any, res: any) => {
+    try {
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const { id } = req.params;
+      const index = agreements.findIndex((a: any) => a.id === id);
+      if (index !== -1) {
+        agreements[index] = { ...agreements[index], ...req.body };
+        fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: "Not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update agreement" });
+    }
+  };
+
+  app.patch(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
+  app.post(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
+
+  app.delete(["/api/agreements/:id", "/api/agreements/:id/"], (req, res) => {
+    try {
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const { id } = req.params;
+      const filtered = agreements.filter((a: any) => a.id !== id);
+      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(filtered, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete agreement" });
+    }
   });
 
-  app.get("/api/debtors", (req, res) => {
-    const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
-    res.json(JSON.parse(data));
+  app.post(["/api/agreements/sync", "/api/agreements/sync/"], (req, res) => {
+    try {
+      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to sync agreements" });
+    }
   });
 
-  app.post("/api/debtors", (req, res) => {
-    fs.writeFileSync(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
+  app.get(["/api/debtors", "/api/debtors/"], (req, res) => {
+    try {
+      const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
+      res.json(JSON.parse(data));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to read debtors" });
+    }
   });
 
-  app.get("/api/staff", (req, res) => {
-    const data = fs.readFileSync(STAFF_FILE, "utf-8");
-    res.json(JSON.parse(data));
+  app.post(["/api/debtors", "/api/debtors/"], (req, res) => {
+    try {
+      fs.writeFileSync(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save debtors" });
+    }
   });
 
-  app.post("/api/staff", (req, res) => {
-    fs.writeFileSync(STAFF_FILE, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
+  app.get(["/api/staff", "/api/staff/"], (req, res) => {
+    try {
+      const data = fs.readFileSync(STAFF_FILE, "utf-8");
+      res.json(JSON.parse(data));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to read staff config" });
+    }
   });
 
-  // Vite middleware
+  app.post(["/api/staff", "/api/staff/"], (req, res) => {
+    try {
+      fs.writeFileSync(STAFF_FILE, JSON.stringify(req.body, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save staff config" });
+    }
+  });
+
+  app.get("/api/status", (req, res) => {
+    try {
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const debtors = JSON.parse(fs.readFileSync(DEBTORS_FILE, "utf-8"));
+      res.json({
+        agreementsCount: agreements.length,
+        debtorsCount: debtors.length,
+        agreementsFile: AGREEMENTS_FILE,
+        debtorsFile: DEBTORS_FILE,
+        writable: true
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API Catch-all with 405/404 handling
+  app.all("/api/*", (req, res) => {
+    const supportedMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'];
+    if (!supportedMethods.includes(req.method)) {
+      return res.status(405).json({ 
+        error: "Method Not Allowed", 
+        method: req.method,
+        path: req.url 
+      });
+    }
+    res.status(404).json({ 
+      error: "Not Found", 
+      message: `API endpoint ${req.method} ${req.url} not found`,
+      suggestion: "Check if you have a trailing slash mismatch or wrong ID"
+    });
+  });
+
+  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
