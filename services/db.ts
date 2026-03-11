@@ -209,7 +209,18 @@ export const DBService = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updates)
         });
-        if (!fallbackResponse.ok) throw new Error(`Fallback POST failed: ${fallbackResponse.status}`);
+        
+        if (fallbackResponse.status === 405) {
+          console.warn("[DBService] POST /api/agreements/:id returned 405, retrying with trailing slash...");
+          const slashResponse = await fetch(`${API_BASE}/agreements/${id}/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+          });
+          if (!slashResponse.ok) throw new Error(`Slash retry failed: ${slashResponse.status}`);
+        } else if (!fallbackResponse.ok) {
+          throw new Error(`Fallback POST failed: ${fallbackResponse.status}`);
+        }
       } else if (!response.ok) {
         let errorMsg = `HTTP ${response.status}`;
         try {

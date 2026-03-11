@@ -8,8 +8,34 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.join(process.cwd(), "data");
-console.log(`[Server] Data directory set to: ${DATA_DIR}`);
+let DATA_DIR = path.join(process.cwd(), "data");
+
+// Resilient data directory selection
+const tryDataDir = (dir: string) => {
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const testFile = path.join(dir, ".write-test-" + Date.now());
+    fs.writeFileSync(testFile, "test");
+    fs.unlinkSync(testFile);
+    return true;
+  } catch (e) {
+    console.error(`[Server] Directory ${dir} is not writable:`, e);
+    return false;
+  }
+};
+
+if (!tryDataDir(DATA_DIR)) {
+  const fallbackDir = path.join("/tmp", "kdb-data");
+  console.warn(`[Server] Falling back to writable directory: ${fallbackDir}`);
+  DATA_DIR = fallbackDir;
+  if (!tryDataDir(DATA_DIR)) {
+    console.error("[Server] CRITICAL: No writable data directory found!");
+  }
+}
+
+console.log(`[Server] Active data directory: ${DATA_DIR}`);
 
 const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
@@ -32,22 +58,6 @@ const INITIAL_DEBTORS = [
     installments: [{ no: 1, period: 'Jan 2024', dueDate: '', amount: 150000 }]
   }
 ];
-
-// Ensure data directory and files exist
-if (!fs.existsSync(DATA_DIR)) {
-  console.log(`Creating directory: ${DATA_DIR}`);
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Test writability
-try {
-  const testFile = path.join(DATA_DIR, ".write-test");
-  fs.writeFileSync(testFile, "test");
-  fs.unlinkSync(testFile);
-  console.log(`Data directory ${DATA_DIR} is writable`);
-} catch (e) {
-  console.error(`CRITICAL: Data directory ${DATA_DIR} is NOT writable:`, e);
-}
 
 const ensureFile = (file: string, defaultData: any) => {
   if (!fs.existsSync(file)) {
@@ -243,10 +253,10 @@ async function startServer() {
     }
   };
 
-  app.patch("/api/agreements/:id", handleUpdate);
-  app.post("/api/agreements/:id", handleUpdate);
+  app.patch(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
+  app.post(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
 
-  app.delete("/api/agreements/:id", (req, res) => {
+  app.delete(["/api/agreements/:id", "/api/agreements/:id/"], (req, res) => {
     try {
       let agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
@@ -293,9 +303,21 @@ async function startServer() {
     }
   });
 
-  // API Catch-all
+  // API Catch-all with 405/404 handling
   app.all("/api/*", (req, res) => {
-    res.status(404).json({ error: `API endpoint ${req.method} ${req.url} not found or method not allowed` });
+    const supportedMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'];
+    if (!supportedMethods.includes(req.method)) {
+      return res.status(405).json({ 
+        error: "Method Not Allowed", 
+        method: req.method,
+        path: req.url 
+      });
+    }
+    res.status(404).json({ 
+      error: "Not Found", 
+      message: `API endpoint ${req.method} ${req.url} not found`,
+      suggestion: "Check if you have a trailing slash mismatch or wrong ID"
+    });
   });
 
   // Vite middleware for development
