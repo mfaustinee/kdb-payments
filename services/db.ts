@@ -27,25 +27,12 @@ export const DBService = {
 
   async getAgreements(): Promise<AgreementData[]> {
     let agreements: AgreementData[] = [];
+    const isCloud = this.isCloudEnabled();
 
-    // 1. Try Local API first (Fastest for current session)
-    try {
-      const response = await fetch(`${API_BASE}/agreements?t=${Date.now()}`);
-      if (response.ok) {
-        agreements = await response.json();
-        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
-      } else {
-        console.warn(`[DBService] Local API getAgreements returned ${response.status}`);
-      }
-    } catch (error) {
-      console.error("[DBService] Local API getAgreements network error:", error);
-      const local = localStorage.getItem('kdb_agreements_fallback');
-      if (local) agreements = JSON.parse(local);
-    }
-
-    // 2. If Cloud is enabled, always try to fetch latest from Cloud to sync across devices
-    if (this.isCloudEnabled()) {
+    // 1. If Cloud is enabled, try Cloud FIRST (Source of truth)
+    if (isCloud) {
       try {
+        console.log("[DBService] Fetching agreements from Cloud...");
         const { data, error } = await supabase!
           .from('agreements')
           .select('*')
@@ -56,13 +43,32 @@ export const DBService = {
         } else if (data && data.length > 0) {
           agreements = data as AgreementData[];
           console.log(`[DBService] Synced ${agreements.length} agreements from Cloud`);
-          // Update local cache in background
+          // Update local cache and server in background
           this.syncAgreementsToLocal(agreements).catch(e => console.error("[DBService] Background sync to local failed:", e));
           localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+          return agreements; // Return early if cloud succeeded
         }
       } catch (error) {
         console.error("[DBService] Cloud sync error:", error);
       }
+    }
+
+    // 2. Fallback to Local API
+    try {
+      console.log("[DBService] Fetching agreements from Local API...");
+      const response = await fetch(`${API_BASE}/agreements?t=${Date.now()}`);
+      if (response.ok) {
+        agreements = await response.json();
+        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      } else {
+        console.warn(`[DBService] Local API getAgreements returned ${response.status}`);
+        const local = localStorage.getItem('kdb_agreements_fallback');
+        if (local) agreements = JSON.parse(local);
+      }
+    } catch (error) {
+      console.error("[DBService] Local API getAgreements network error:", error);
+      const local = localStorage.getItem('kdb_agreements_fallback');
+      if (local) agreements = JSON.parse(local);
     }
 
     return agreements;
@@ -102,9 +108,34 @@ export const DBService = {
   },
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
-    // 1. Local API first (Immediate)
+    const isCloud = this.isCloudEnabled();
+    let cloudSuccess = false;
+
+    // 1. Try Cloud (Supabase) FIRST if enabled - this bypasses local 405 errors
+    if (isCloud) {
+      try {
+        console.log("[DBService] Saving to cloud first...");
+        const { error } = await supabase!.from('agreements').insert(agreement);
+        
+        if (error) {
+          if (error.code === '23505') { // Unique violation
+            console.warn("[DBService] Agreement already exists in cloud, treating as success");
+            cloudSuccess = true;
+          } else {
+            console.error("[DBService] Supabase saveAgreement error:", error.message);
+          }
+        } else {
+          console.log("[DBService] Cloud save successful");
+          cloudSuccess = true;
+        }
+      } catch (e) {
+        console.error("[DBService] Supabase save exception:", e);
+      }
+    }
+
+    // 2. Local API (Now secondary/background if cloud succeeded)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       console.log(`[DBService] Attempting to save agreement ${agreement.id} locally...`);
@@ -118,7 +149,6 @@ export const DBService = {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        // If 405, try with trailing slash
         if (response.status === 405) {
           console.warn("[DBService] POST /api/agreements returned 405, retrying with trailing slash...");
           const retryResponse = await fetch(`${API_BASE}/agreements/`, {
@@ -126,20 +156,15 @@ export const DBService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(agreement)
           });
-          if (!retryResponse.ok) throw new Error(`Retry failed: ${retryResponse.status}`);
-        } else {
-          let errorMsg = `HTTP ${response.status}`;
-          try {
-            const errorData = await response.json();
-            errorMsg = errorData.error || errorMsg;
-          } catch (e) {}
-          throw new Error(errorMsg);
+          if (!retryResponse.ok && !cloudSuccess) throw new Error(`Retry failed: ${retryResponse.status}`);
+        } else if (!cloudSuccess) {
+          throw new Error(`HTTP ${response.status}`);
         }
       }
       
       console.log("[DBService] Local save successful");
       
-      // Update local fallback immediately
+      // Update local fallback
       const local = localStorage.getItem('kdb_agreements_fallback');
       let agreements = local ? JSON.parse(local) : [];
       const index = agreements.findIndex((a: any) => a.id === agreement.id);
@@ -150,48 +175,45 @@ export const DBService = {
     } catch (error: any) {
       clearTimeout(timeoutId);
       console.error("[DBService] Local API saveAgreement error:", error);
-      if (error.name === 'AbortError') {
-        throw new Error("Connection timed out. The server is taking too long to respond.");
-      }
-      throw new Error(`Local save failed: ${error.message || "Connection error"}`);
-    }
-
-    // 2. Supabase in background
-    if (this.isCloudEnabled()) {
-      console.log("[DBService] Syncing to cloud in background...");
-      (async () => {
-        try {
-          // Use .insert() instead of .upsert() for better security
-          // This prevents public users from overwriting existing records
-          const { error } = await supabase!.from('agreements').insert(agreement);
-          
-          if (error) {
-            // If it already exists, we might need to update (though clients shouldn't usually do this)
-            if (error.code === '23505') { // Unique violation
-              console.warn("[DBService] Agreement already exists in cloud, skipping insert");
-            } else {
-              console.error("[DBService] Supabase saveAgreement background error:", error.message);
-            }
-          } else {
-            console.log("[DBService] Cloud sync successful");
-          }
-        } catch (e) {
-          console.error("[DBService] Supabase background exception:", e);
+      
+      // If cloud succeeded, we don't throw, we just log the local failure
+      if (cloudSuccess) {
+        console.warn("[DBService] Local save failed but Cloud succeeded. Continuing.");
+      } else {
+        if (error.name === 'AbortError') {
+          throw new Error("Connection timed out. The server is taking too long to respond.");
         }
-      })();
+        throw new Error(`Save failed: ${error.message || "Connection error"}. Please check your internet.`);
+      }
     }
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
-    // 1. Local API first (Immediate)
+    const isCloud = this.isCloudEnabled();
+    let cloudSuccess = false;
+
+    // 1. Try Cloud (Supabase) FIRST
+    if (isCloud) {
+      try {
+        console.log("[DBService] Updating cloud first...");
+        const { error } = await supabase!.from('agreements').update(updates).eq('id', id);
+        if (error) {
+          console.error("[DBService] Supabase updateAgreement error:", error.message);
+        } else {
+          console.log("[DBService] Cloud update successful");
+          cloudSuccess = true;
+        }
+      } catch (e) {
+        console.error("[DBService] Supabase update exception:", e);
+      }
+    }
+
+    // 2. Local API
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       console.log(`[DBService] Attempting to update agreement ${id} locally...`);
-      
-      // We use PATCH first, but the server now also supports POST /api/agreements/:id 
-      // and POST /api/agreements (upsert)
       const response = await fetch(`${API_BASE}/agreements/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -201,7 +223,6 @@ export const DBService = {
       
       clearTimeout(timeoutId);
       
-      // If PATCH is not allowed (405), try POST as a fallback
       if (response.status === 405) {
         console.warn("[DBService] PATCH not allowed, trying POST fallback...");
         const fallbackResponse = await fetch(`${API_BASE}/agreements/${id}`, {
@@ -217,22 +238,17 @@ export const DBService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updates)
           });
-          if (!slashResponse.ok) throw new Error(`Slash retry failed: ${slashResponse.status}`);
-        } else if (!fallbackResponse.ok) {
+          if (!slashResponse.ok && !cloudSuccess) throw new Error(`Slash retry failed: ${slashResponse.status}`);
+        } else if (!fallbackResponse.ok && !cloudSuccess) {
           throw new Error(`Fallback POST failed: ${fallbackResponse.status}`);
         }
-      } else if (!response.ok) {
-        let errorMsg = `HTTP ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMsg = errorData.error || errorMsg;
-        } catch (e) {}
-        throw new Error(errorMsg);
+      } else if (!response.ok && !cloudSuccess) {
+        throw new Error(`HTTP ${response.status}`);
       }
       
       console.log("[DBService] Local update successful");
       
-      // Update local fallback immediately
+      // Update local fallback
       const local = localStorage.getItem('kdb_agreements_fallback');
       if (local) {
         let agreements = JSON.parse(local);
@@ -245,24 +261,15 @@ export const DBService = {
     } catch (error: any) {
       clearTimeout(timeoutId);
       console.error("[DBService] Local API updateAgreement error:", error);
-      if (error.name === 'AbortError') {
-        throw new Error("Connection timed out. The server is taking too long to respond.");
-      }
-      throw new Error(`Local update failed: ${error.message || "Connection error"}`);
-    }
-
-    // 2. Supabase in background
-    if (this.isCloudEnabled()) {
-      console.log("[DBService] Syncing update to cloud in background...");
-      (async () => {
-        try {
-          const { error } = await supabase!.from('agreements').update(updates).eq('id', id);
-          if (error) console.error("[DBService] Supabase updateAgreement background error:", error.message);
-          else console.log("[DBService] Cloud update sync successful");
-        } catch (e) {
-          console.error("[DBService] Supabase update background exception:", e);
+      
+      if (cloudSuccess) {
+        console.warn("[DBService] Local update failed but Cloud succeeded. Continuing.");
+      } else {
+        if (error.name === 'AbortError') {
+          throw new Error("Connection timed out.");
         }
-      })();
+        throw new Error(`Update failed: ${error.message || "Connection error"}`);
+      }
     }
   },
 
@@ -299,9 +306,33 @@ export const DBService = {
 
   async getDebtors(): Promise<DebtorRecord[]> {
     let debtors: DebtorRecord[] = [];
+    const isCloud = this.isCloudEnabled();
 
-    // 1. Local API first
+    // 1. Try Cloud FIRST (Ultimate source of truth)
+    if (isCloud) {
+      try {
+        console.log("[DBService] Fetching debtors from Cloud...");
+        const { data, error } = await supabase!
+          .from('debtors')
+          .select('*')
+          .order('dboName', { ascending: true });
+        
+        if (!error && data && data.length > 0) {
+          debtors = data as DebtorRecord[];
+          console.log(`[DBService] Synced ${debtors.length} debtors from Cloud`);
+          // Sync back to local server in background
+          this.saveDebtors(debtors).catch(e => console.error("[DBService] Background debtors sync failed:", e));
+          localStorage.setItem('kdb_debtors_fallback', JSON.stringify(debtors));
+          return debtors;
+        }
+      } catch (error) {
+        console.error("[DBService] Cloud getDebtors error:", error);
+      }
+    }
+
+    // 2. Fallback to Local API
     try {
+      console.log("[DBService] Fetching debtors from Local API...");
       const response = await fetch(`${API_BASE}/debtors?t=${Date.now()}`);
       if (response.ok) {
         debtors = await response.json();
@@ -311,25 +342,6 @@ export const DBService = {
       console.error("[DBService] Local API getDebtors error:", error);
       const local = localStorage.getItem('kdb_debtors_fallback');
       if (local) debtors = JSON.parse(local);
-    }
-
-    // 2. Cloud Sync (Ultimate source of truth for multi-device)
-    if (this.isCloudEnabled()) {
-      try {
-        const { data, error } = await supabase!
-          .from('debtors')
-          .select('*')
-          .order('dboName', { ascending: true });
-        
-        if (!error && data && data.length > 0) {
-          debtors = data as DebtorRecord[];
-          console.log(`[DBService] Synced ${debtors.length} debtors from Cloud`);
-          // Sync back to local server so it's available offline/fast
-          this.saveDebtors(debtors); 
-        }
-      } catch (error) {
-        console.error("[DBService] Cloud getDebtors error:", error);
-      }
     }
 
     return debtors;
