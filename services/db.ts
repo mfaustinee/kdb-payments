@@ -118,12 +118,23 @@ export const DBService = {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        let errorMsg = `HTTP ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMsg = errorData.error || errorMsg;
-        } catch (e) {}
-        throw new Error(errorMsg);
+        // If 405, try with trailing slash
+        if (response.status === 405) {
+          console.warn("[DBService] POST /api/agreements returned 405, retrying with trailing slash...");
+          const retryResponse = await fetch(`${API_BASE}/agreements/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(agreement)
+          });
+          if (!retryResponse.ok) throw new Error(`Retry failed: ${retryResponse.status}`);
+        } else {
+          let errorMsg = `HTTP ${response.status}`;
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorMsg;
+          } catch (e) {}
+          throw new Error(errorMsg);
+        }
       }
       
       console.log("[DBService] Local save successful");
@@ -178,6 +189,9 @@ export const DBService = {
 
     try {
       console.log(`[DBService] Attempting to update agreement ${id} locally...`);
+      
+      // We use PATCH first, but the server now also supports POST /api/agreements/:id 
+      // and POST /api/agreements (upsert)
       const response = await fetch(`${API_BASE}/agreements/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -187,7 +201,16 @@ export const DBService = {
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
+      // If PATCH is not allowed (405), try POST as a fallback
+      if (response.status === 405) {
+        console.warn("[DBService] PATCH not allowed, trying POST fallback...");
+        const fallbackResponse = await fetch(`${API_BASE}/agreements/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        if (!fallbackResponse.ok) throw new Error(`Fallback POST failed: ${fallbackResponse.status}`);
+      } else if (!response.ok) {
         let errorMsg = `HTTP ${response.status}`;
         try {
           const errorData = await response.json();
@@ -302,25 +325,46 @@ export const DBService = {
   },
 
   async saveDebtors(debtors: DebtorRecord[]): Promise<void> {
-    console.log(`[DBService] Saving ${debtors.length} debtors...`);
+    console.log(`[DBService] Saving ${debtors.length} debtors locally...`);
     // 1. Local API first
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const response = await fetch(`${API_BASE}/debtors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(debtors)
+        body: JSON.stringify(debtors),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Local save failed: ${errText}`);
+        // If 405, try with trailing slash
+        if (response.status === 405) {
+          console.warn("[DBService] POST /api/debtors returned 405, retrying with trailing slash...");
+          const retryResponse = await fetch(`${API_BASE}/debtors/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(debtors)
+          });
+          if (!retryResponse.ok) throw new Error(`Retry failed: ${retryResponse.status}`);
+        } else {
+          const errText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errText}`);
+        }
       }
       console.log("[DBService] Local API saveDebtors success");
       localStorage.setItem('kdb_debtors_fallback', JSON.stringify(debtors));
-    } catch (error) {
+    } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error("[DBService] Local API saveDebtors error:", error);
       // Still save to localStorage even if API fails
       localStorage.setItem('kdb_debtors_fallback', JSON.stringify(debtors));
-      // Don't rethrow if we have localStorage as backup, unless we want to alert user
+      if (error.name === 'AbortError') {
+        throw new Error("Connection timed out saving debtors.");
+      }
     }
 
     // 2. Supabase background

@@ -93,14 +93,20 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors());
-  app.options('*', cors()); // Enable pre-flight for all routes
+  // Improved CORS configuration
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  }));
+  app.options('*', cors()); 
+  
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-  // Request logging for API
-  app.use("/api", (req, res, next) => {
-    console.log(`[Server] API Request: ${req.method} ${req.url}`);
+  // Detailed request logging for debugging 405/404 errors
+  app.use((req, res, next) => {
+    console.log(`[Server] ${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
   });
 
@@ -125,7 +131,7 @@ async function startServer() {
     });
   });
 
-  app.get("/api/debtors", (req, res) => {
+  app.get(["/api/debtors", "/api/debtors/"], (req, res) => {
     try {
       if (fs.existsSync(DEBTORS_FILE)) {
         const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
@@ -140,17 +146,12 @@ async function startServer() {
     }
   });
 
-  app.post("/api/debtors", (req, res) => {
+  app.post(["/api/debtors", "/api/debtors/"], (req, res) => {
     try {
       if (!req.body || !Array.isArray(req.body)) throw new Error("Invalid body: expected array");
       const dataStr = JSON.stringify(req.body, null, 2);
       console.log(`[Server] POST /api/debtors: Saving ${req.body.length} debtors to ${DEBTORS_FILE}`);
       fs.writeFileSync(DEBTORS_FILE, dataStr);
-      
-      // Verify write
-      const verify = fs.readFileSync(DEBTORS_FILE, "utf-8");
-      console.log(`[Server] Verify write: ${verify.length} bytes written`);
-      
       res.json({ success: true });
     } catch (error: any) {
       console.error("[Server] POST /api/debtors error:", error);
@@ -158,7 +159,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/agreements", (req, res) => {
+  app.get(["/api/agreements", "/api/agreements/"], (req, res) => {
     try {
       if (fs.existsSync(AGREEMENTS_FILE)) {
         const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
@@ -171,7 +172,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/agreements", (req, res) => {
+  app.post(["/api/agreements", "/api/agreements/"], (req, res) => {
     try {
       let agreements = [];
       if (fs.existsSync(AGREEMENTS_FILE)) {
@@ -219,11 +220,14 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/agreements/:id", (req, res) => {
+  // Support both PATCH and POST for updates to avoid 405 errors in some environments
+  const handleUpdate = (req: any, res: any) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
       const updates = req.body;
+      
+      console.log(`[Server] Updating agreement ${id} via ${req.method}`);
       
       const index = agreements.findIndex((a: any) => a.id === id);
       if (index !== -1) {
@@ -234,9 +238,13 @@ async function startServer() {
         res.status(404).json({ error: "Agreement not found" });
       }
     } catch (error) {
+      console.error("[Server] Update error:", error);
       res.status(500).json({ error: "Failed to update agreement" });
     }
-  });
+  };
+
+  app.patch("/api/agreements/:id", handleUpdate);
+  app.post("/api/agreements/:id", handleUpdate);
 
   app.delete("/api/agreements/:id", (req, res) => {
     try {
