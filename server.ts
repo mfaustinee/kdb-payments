@@ -40,24 +40,6 @@ console.log(`[Server] Active data directory: ${DATA_DIR}`);
 const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
-const LOG_FILE = path.join(DATA_DIR, "server.log");
-
-// Logging utility
-const logToFile = (message: string) => {
-  const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] ${message}\n`;
-  console.log(logEntry.trim());
-  try {
-    fs.appendFileSync(LOG_FILE, logEntry);
-    // Keep log file small (last 1000 lines)
-    const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
-    if (logs.length > 1000) {
-      fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
-    }
-  } catch (e) {
-    console.error("Failed to write to log file:", e);
-  }
-};
 
 const INITIAL_DEBTORS = [
   {
@@ -105,11 +87,11 @@ async function startServer() {
 
   // Detailed request logging
   app.use((req, res, next) => {
-    logToFile(`${req.method} ${req.url}`);
+    console.log(`[Server] ${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
   });
 
-  // API Routes (Directly on app for maximum reliability)
+  // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ 
       status: "ok", 
@@ -118,24 +100,11 @@ async function startServer() {
     });
   });
 
-  app.get("/api/logs", (req, res) => {
-    try {
-      if (fs.existsSync(LOG_FILE)) {
-        res.type('text/plain').send(fs.readFileSync(LOG_FILE, 'utf-8'));
-      } else {
-        res.send("No logs found.");
-      }
-    } catch (e) {
-      res.status(500).send("Error reading logs");
-    }
-  });
-
   app.get(["/api/agreements", "/api/agreements/"], (req, res) => {
     try {
       const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
       res.json(JSON.parse(data));
     } catch (error) {
-      logToFile(`Error reading agreements: ${error}`);
       res.status(500).json({ error: "Failed to read agreements" });
     }
   });
@@ -148,10 +117,8 @@ async function startServer() {
       if (index !== -1) agreements[index] = newAgreement;
       else agreements.push(newAgreement);
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-      logToFile(`Saved agreement: ${newAgreement.id}`);
       res.json({ success: true });
     } catch (error) {
-      logToFile(`Error saving agreement: ${error}`);
       res.status(500).json({ error: "Failed to save agreement" });
     }
   });
@@ -164,13 +131,11 @@ async function startServer() {
       if (index !== -1) {
         agreements[index] = { ...agreements[index], ...req.body };
         fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-        logToFile(`Updated agreement: ${id}`);
         res.json({ success: true });
       } else {
         res.status(404).json({ error: "Not found" });
       }
     } catch (error) {
-      logToFile(`Error updating agreement ${req.params.id}: ${error}`);
       res.status(500).json({ error: "Failed to update agreement" });
     }
   };
@@ -184,10 +149,8 @@ async function startServer() {
       const { id } = req.params;
       const filtered = agreements.filter((a: any) => a.id !== id);
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(filtered, null, 2));
-      logToFile(`Deleted agreement: ${id}`);
       res.json({ success: true });
     } catch (error) {
-      logToFile(`Error deleting agreement ${req.params.id}: ${error}`);
       res.status(500).json({ error: "Failed to delete agreement" });
     }
   });
@@ -195,10 +158,8 @@ async function startServer() {
   app.post(["/api/agreements/sync", "/api/agreements/sync/"], (req, res) => {
     try {
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
-      logToFile(`Synced ${req.body.length} agreements`);
       res.json({ success: true });
     } catch (error) {
-      logToFile(`Error syncing agreements: ${error}`);
       res.status(500).json({ error: "Failed to sync agreements" });
     }
   });
@@ -248,21 +209,27 @@ async function startServer() {
         debtorsCount: debtors.length,
         agreementsFile: AGREEMENTS_FILE,
         debtorsFile: DEBTORS_FILE,
-        writable: true,
-        dataDir: DATA_DIR
+        writable: true
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // API Catch-all
+  // API Catch-all with 405/404 handling
   app.all("/api/*", (req, res) => {
-    logToFile(`API 404: ${req.method} ${req.url}`);
+    const supportedMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'];
+    if (!supportedMethods.includes(req.method)) {
+      return res.status(405).json({ 
+        error: "Method Not Allowed", 
+        method: req.method,
+        path: req.url 
+      });
+    }
     res.status(404).json({ 
       error: "Not Found", 
       message: `API endpoint ${req.method} ${req.url} not found`,
-      path: req.path
+      suggestion: "Check if you have a trailing slash mismatch or wrong ID"
     });
   });
 

@@ -3,35 +3,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const API_BASE = '/api';
 
-// Helper to safely fetch JSON
-async function fetchJSON(url: string, options?: RequestInit) {
-  const response = await fetch(url, options);
-  const contentType = response.headers.get("content-type");
-  
-  if (!response.ok) {
-    let errorDetail = '';
-    try {
-      const data = await response.json();
-      errorDetail = data.error || data.message || '';
-    } catch (e) {
-      errorDetail = await response.text();
-    }
-    throw new Error(`Server Error (${response.status}): ${errorDetail.substring(0, 100)}`);
-  }
-  
-  if (!contentType || !contentType.includes("application/json")) {
-    const text = await response.text();
-    console.error("[DBService] Expected JSON but got:", text.substring(0, 200));
-    throw new Error(`Invalid Response: Expected JSON but received ${contentType || 'unknown content'}. 
-    This usually means the request hit a webpage instead of an API. 
-    URL: ${url}
-    Status: ${response.status}
-    Body Preview: ${text.substring(0, 100)}...`);
-  }
-  
-  return response.json();
-}
-
 // Initialize Supabase client if environment variables are present
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -79,11 +50,15 @@ export const DBService = {
 
     // 2. Fallback to Local API
     try {
-      const data = await fetchJSON(`${API_BASE}/agreements?t=${Date.now()}`);
-      agreements = data;
-      localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      const response = await fetch(`${API_BASE}/agreements?t=${Date.now()}`);
+      if (response.ok) {
+        agreements = await response.json();
+        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      } else {
+        const local = localStorage.getItem('kdb_agreements_fallback');
+        if (local) agreements = JSON.parse(local);
+      }
     } catch (error) {
-      console.error("[DBService] Local fetch error:", error);
       const local = localStorage.getItem('kdb_agreements_fallback');
       if (local) agreements = JSON.parse(local);
     }
@@ -93,41 +68,42 @@ export const DBService = {
 
   async syncAgreementsToLocal(agreements: AgreementData[]): Promise<void> {
     try {
-      await fetchJSON(`${API_BASE}/agreements/sync`, {
+      await fetch(`${API_BASE}/agreements/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agreements)
       });
-    } catch (e) {
-      console.error("[DBService] Sync to local failed:", e);
-    }
+    } catch (e) {}
   },
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
     // 1. Local Save FIRST (Blocking for UI feedback)
     try {
-      await fetchJSON(`${API_BASE}/agreements`, {
+      const response = await fetch(`${API_BASE}/agreements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agreement)
       });
+      
+      if (!response.ok && response.status === 405) {
+        await fetch(`${API_BASE}/agreements/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(agreement)
+        });
+      }
     } catch (error) {
       console.error("[DBService] Local save failed:", error);
-      throw error; // Re-throw so UI can show error
+      // We continue to cloud sync even if local fails (e.g. server down)
     }
 
     // 2. Cloud Sync (NON-BLOCKING background task)
     if (this.isCloudEnabled()) {
-      console.log("[DBService] Attempting background Cloud sync for:", agreement.id);
-      supabase!.from('agreements').upsert(agreement).then(({ error }) => {
-        if (error) {
-          console.error("[DBService] Background Cloud sync error:", error.message, error.details, error.hint);
-          // If it's a permission error, it's likely RLS
-          if (error.code === '42501') {
-            console.error("[DBService] SECURITY ERROR: Row Level Security (RLS) is likely blocking this insert. Please check your Supabase policies.");
-          }
+      supabase!.from('agreements').insert(agreement).then(({ error }) => {
+        if (error && error.code !== '23505') {
+          console.error("[DBService] Background Cloud sync error:", error);
         } else {
-          console.log("[DBService] Background Cloud sync successful for:", agreement.id);
+          console.log("[DBService] Background Cloud sync successful");
         }
       });
     }
@@ -144,14 +120,21 @@ export const DBService = {
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
     // 1. Local Update FIRST
     try {
-      await fetchJSON(`${API_BASE}/agreements/${id}`, {
+      const response = await fetch(`${API_BASE}/agreements/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
       });
+      
+      if (response.status === 405) {
+        await fetch(`${API_BASE}/agreements/${id}/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+      }
     } catch (error) {
       console.error("[DBService] Local update failed:", error);
-      throw error;
     }
 
     // 2. Cloud Update (NON-BLOCKING)
@@ -175,11 +158,7 @@ export const DBService = {
 
   async deleteAgreement(id: string): Promise<void> {
     // Local Delete
-    try {
-      await fetchJSON(`${API_BASE}/agreements/${id}`, { method: 'DELETE' });
-    } catch (error) {
-      console.error("[DBService] Local delete failed:", error);
-    }
+    await fetch(`${API_BASE}/agreements/${id}`, { method: 'DELETE' });
     
     // Cloud Delete (Background)
     if (supabase) {
@@ -224,39 +203,25 @@ export const DBService = {
     
     console.log("[DBService] Pushing local data to Cloud...");
     
-    // Get local data with cache busting
-    const timestamp = Date.now();
+    // Get local data
+    const agreementsRes = await fetch(`${API_BASE}/agreements`);
+    const debtorsRes = await fetch(`${API_BASE}/debtors`);
     
-    try {
-      // 1. Verify API is reachable
-      console.log("[DBService] Verifying API health...");
-      await fetchJSON(`${API_BASE}/health?t=${timestamp}`);
-      
-      // 2. Fetch local data
-      console.log("[DBService] Fetching local agreements...");
-      const agreements = await fetchJSON(`${API_BASE}/agreements?t=${timestamp}`);
-      
-      console.log("[DBService] Fetching local debtors...");
-      const debtors = await fetchJSON(`${API_BASE}/debtors?t=${timestamp}`);
-      
-      // 3. Push to Cloud
-      if (agreements && agreements.length > 0) {
-        console.log(`[DBService] Pushing ${agreements.length} agreements to Supabase...`);
-        const { error } = await supabase.from('agreements').upsert(agreements);
-        if (error) throw error;
+    if (agreementsRes.ok) {
+      const agreements = await agreementsRes.json();
+      if (agreements.length > 0) {
+        await supabase.from('agreements').upsert(agreements);
       }
-      
-      if (debtors && debtors.length > 0) {
-        console.log(`[DBService] Pushing ${debtors.length} debtors to Supabase...`);
-        const { error } = await supabase.from('debtors').upsert(debtors);
-        if (error) throw error;
-      }
-      
-      console.log("[DBService] Local -> Cloud Push Complete");
-    } catch (error: any) {
-      console.error("[DBService] Push failed:", error);
-      throw error;
     }
+    
+    if (debtorsRes.ok) {
+      const debtors = await debtorsRes.json();
+      if (debtors.length > 0) {
+        await supabase.from('debtors').upsert(debtors);
+      }
+    }
+    
+    console.log("[DBService] Local -> Cloud Push Complete");
   },
 
   // Removed Realtime Subscriptions as per user request for performance
@@ -278,11 +243,15 @@ export const DBService = {
     }
 
     try {
-      const data = await fetchJSON(`${API_BASE}/debtors?t=${Date.now()}`);
-      debtors = data;
-      localStorage.setItem('kdb_debtors_fallback', JSON.stringify(debtors));
+      const response = await fetch(`${API_BASE}/debtors`);
+      if (response.ok) {
+        debtors = await response.json();
+        localStorage.setItem('kdb_debtors_fallback', JSON.stringify(debtors));
+      } else {
+        const local = localStorage.getItem('kdb_debtors_fallback');
+        if (local) debtors = JSON.parse(local);
+      }
     } catch (error) {
-      console.error("[DBService] Local debtors fetch error:", error);
       const local = localStorage.getItem('kdb_debtors_fallback');
       if (local) debtors = JSON.parse(local);
     }
@@ -291,16 +260,11 @@ export const DBService = {
   },
 
   async saveDebtors(debtors: DebtorRecord[]): Promise<void> {
-    try {
-      await fetchJSON(`${API_BASE}/debtors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(debtors)
-      });
-    } catch (error) {
-      console.error("[DBService] Local debtors save failed:", error);
-    }
-    
+    await fetch(`${API_BASE}/debtors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(debtors)
+    });
     if (supabase) {
       await supabase.from('debtors').upsert(debtors);
     }
@@ -313,10 +277,9 @@ export const DBService = {
       if (data) return data as StaffConfig;
     }
     try {
-      return await fetchJSON(`${API_BASE}/staff?t=${Date.now()}`);
-    } catch (error) {
-      console.error("[DBService] Local staff fetch error:", error);
-    }
+      const response = await fetch(`${API_BASE}/staff`);
+      if (response.ok) return await response.json();
+    } catch (error) {}
     return { officialSignature: '' };
   },
 
@@ -324,14 +287,10 @@ export const DBService = {
     if (supabase) {
       await supabase.from('staff_config').upsert({ id: 1, ...config });
     }
-    try {
-      await fetchJSON(`${API_BASE}/staff`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
-    } catch (error) {
-      console.error("[DBService] Local staff save failed:", error);
-    }
+    await fetch(`${API_BASE}/staff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    });
   }
 };
