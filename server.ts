@@ -91,8 +91,10 @@ async function startServer() {
     next();
   });
 
-  // API Routes
-  app.get("/api/health", (req, res) => {
+  // API Router
+  const apiRouter = express.Router();
+
+  apiRouter.get("/health", (req, res) => {
     res.json({ 
       status: "ok", 
       time: new Date().toISOString(),
@@ -100,8 +102,7 @@ async function startServer() {
     });
   });
 
-  // Standardize routes for Express 5
-  app.get("/api/agreements", (req, res) => {
+  apiRouter.get("/agreements", (req, res) => {
     try {
       const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
       res.json(JSON.parse(data));
@@ -110,7 +111,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/agreements", (req, res) => {
+  apiRouter.post("/agreements", (req, res) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const newAgreement = req.body;
@@ -124,7 +125,7 @@ async function startServer() {
     }
   });
 
-  const handleUpdate = (req: any, res: any) => {
+  apiRouter.patch("/agreements/:id", (req, res) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
@@ -139,12 +140,27 @@ async function startServer() {
     } catch (error) {
       res.status(500).json({ error: "Failed to update agreement" });
     }
-  };
+  });
 
-  app.patch("/api/agreements/:id", handleUpdate);
-  app.post("/api/agreements/:id", handleUpdate);
+  // Support POST for updates too (fallback)
+  apiRouter.post("/agreements/:id", (req, res) => {
+    try {
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const { id } = req.params;
+      const index = agreements.findIndex((a: any) => a.id === id);
+      if (index !== -1) {
+        agreements[index] = { ...agreements[index], ...req.body };
+        fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: "Not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update agreement" });
+    }
+  });
 
-  app.delete("/api/agreements/:id", (req, res) => {
+  apiRouter.delete("/agreements/:id", (req, res) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
@@ -156,7 +172,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/agreements/sync", (req, res) => {
+  apiRouter.post("/agreements/sync", (req, res) => {
     try {
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
@@ -165,7 +181,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/debtors", (req, res) => {
+  apiRouter.get("/debtors", (req, res) => {
     try {
       const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
       res.json(JSON.parse(data));
@@ -174,7 +190,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/debtors", (req, res) => {
+  apiRouter.post("/debtors", (req, res) => {
     try {
       fs.writeFileSync(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
@@ -183,7 +199,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/staff", (req, res) => {
+  apiRouter.get("/staff", (req, res) => {
     try {
       const data = fs.readFileSync(STAFF_FILE, "utf-8");
       res.json(JSON.parse(data));
@@ -192,7 +208,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/staff", (req, res) => {
+  apiRouter.post("/staff", (req, res) => {
     try {
       fs.writeFileSync(STAFF_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
@@ -201,7 +217,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/status", (req, res) => {
+  apiRouter.get("/status", (req, res) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const debtors = JSON.parse(fs.readFileSync(DEBTORS_FILE, "utf-8"));
@@ -217,20 +233,15 @@ async function startServer() {
     }
   });
 
-  // API Catch-all with 405/404 handling
+  // Mount API Router
+  app.use("/api", apiRouter);
+
+  // API Catch-all (must be after apiRouter)
   app.all("/api/*", (req, res) => {
-    const supportedMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'];
-    if (!supportedMethods.includes(req.method)) {
-      return res.status(405).json({ 
-        error: "Method Not Allowed", 
-        method: req.method,
-        path: req.url 
-      });
-    }
     res.status(404).json({ 
       error: "Not Found", 
       message: `API endpoint ${req.method} ${req.url} not found`,
-      suggestion: "Check if you have a trailing slash mismatch or wrong ID"
+      path: req.path
     });
   });
 

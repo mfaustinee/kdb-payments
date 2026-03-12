@@ -5,13 +5,7 @@ const API_BASE = '/api';
 
 // Helper to safely fetch JSON
 async function fetchJSON(url: string, options?: RequestInit) {
-  // Ensure we are using a relative path if it starts with the current origin
-  let targetUrl = url;
-  if (typeof window !== 'undefined' && url.startsWith(window.location.origin)) {
-    targetUrl = url.replace(window.location.origin, '');
-  }
-
-  const response = await fetch(targetUrl, options);
+  const response = await fetch(url, options);
   const contentType = response.headers.get("content-type");
   
   if (!response.ok) {
