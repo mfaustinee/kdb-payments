@@ -1,22 +1,34 @@
 import { AgreementData, DebtorRecord, StaffConfig } from '../types.ts';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const API_BASE = typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api';
+const API_BASE = '/api';
 
 // Helper to safely fetch JSON
 async function fetchJSON(url: string, options?: RequestInit) {
-  const response = await fetch(url, options);
+  // Ensure we are using a relative path if it starts with the current origin
+  let targetUrl = url;
+  if (typeof window !== 'undefined' && url.startsWith(window.location.origin)) {
+    targetUrl = url.replace(window.location.origin, '');
+  }
+
+  const response = await fetch(targetUrl, options);
   const contentType = response.headers.get("content-type");
   
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Server returned ${response.status}: ${text.substring(0, 100)}`);
+    let errorDetail = '';
+    try {
+      const data = await response.json();
+      errorDetail = data.error || data.message || '';
+    } catch (e) {
+      errorDetail = await response.text();
+    }
+    throw new Error(`Server Error (${response.status}): ${errorDetail.substring(0, 100)}`);
   }
   
   if (!contentType || !contentType.includes("application/json")) {
     const text = await response.text();
     console.error("[DBService] Expected JSON but got:", text.substring(0, 200));
-    throw new Error("Server returned HTML instead of data. This usually means the API route was not found or the server is restarting.");
+    throw new Error(`Invalid Response: Expected JSON but received ${contentType || 'unknown content'}. This often happens if the server is restarting or the API route is incorrect.`);
   }
   
   return response.json();
@@ -226,18 +238,37 @@ export const DBService = {
     
     // Get local data with cache busting
     const timestamp = Date.now();
-    const agreements = await fetchJSON(`${API_BASE}/agreements?t=${timestamp}`);
-    const debtors = await fetchJSON(`${API_BASE}/debtors?t=${timestamp}`);
     
-    if (agreements && agreements.length > 0) {
-      await supabase.from('agreements').upsert(agreements);
+    try {
+      // 1. Verify API is reachable
+      console.log("[DBService] Verifying API health...");
+      await fetchJSON(`${API_BASE}/health?t=${timestamp}`);
+      
+      // 2. Fetch local data
+      console.log("[DBService] Fetching local agreements...");
+      const agreements = await fetchJSON(`${API_BASE}/agreements?t=${timestamp}`);
+      
+      console.log("[DBService] Fetching local debtors...");
+      const debtors = await fetchJSON(`${API_BASE}/debtors?t=${timestamp}`);
+      
+      // 3. Push to Cloud
+      if (agreements && agreements.length > 0) {
+        console.log(`[DBService] Pushing ${agreements.length} agreements to Supabase...`);
+        const { error } = await supabase.from('agreements').upsert(agreements);
+        if (error) throw error;
+      }
+      
+      if (debtors && debtors.length > 0) {
+        console.log(`[DBService] Pushing ${debtors.length} debtors to Supabase...`);
+        const { error } = await supabase.from('debtors').upsert(debtors);
+        if (error) throw error;
+      }
+      
+      console.log("[DBService] Local -> Cloud Push Complete");
+    } catch (error: any) {
+      console.error("[DBService] Push failed:", error);
+      throw error;
     }
-    
-    if (debtors && debtors.length > 0) {
-      await supabase.from('debtors').upsert(debtors);
-    }
-    
-    console.log("[DBService] Local -> Cloud Push Complete");
   },
 
   // Removed Realtime Subscriptions as per user request for performance

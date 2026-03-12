@@ -100,7 +100,8 @@ async function startServer() {
     });
   });
 
-  app.get(["/api/agreements", "/api/agreements/"], (req, res) => {
+  // Standardize routes for Express 5
+  app.get("/api/agreements", (req, res) => {
     try {
       const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
       res.json(JSON.parse(data));
@@ -109,7 +110,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/agreements", "/api/agreements/"], (req, res) => {
+  app.post("/api/agreements", (req, res) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const newAgreement = req.body;
@@ -140,10 +141,10 @@ async function startServer() {
     }
   };
 
-  app.patch(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
-  app.post(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
+  app.patch("/api/agreements/:id", handleUpdate);
+  app.post("/api/agreements/:id", handleUpdate);
 
-  app.delete(["/api/agreements/:id", "/api/agreements/:id/"], (req, res) => {
+  app.delete("/api/agreements/:id", (req, res) => {
     try {
       const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
@@ -155,7 +156,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/agreements/sync", "/api/agreements/sync/"], (req, res) => {
+  app.post("/api/agreements/sync", (req, res) => {
     try {
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
@@ -164,7 +165,7 @@ async function startServer() {
     }
   });
 
-  app.get(["/api/debtors", "/api/debtors/"], (req, res) => {
+  app.get("/api/debtors", (req, res) => {
     try {
       const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
       res.json(JSON.parse(data));
@@ -173,7 +174,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/debtors", "/api/debtors/"], (req, res) => {
+  app.post("/api/debtors", (req, res) => {
     try {
       fs.writeFileSync(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
@@ -182,7 +183,7 @@ async function startServer() {
     }
   });
 
-  app.get(["/api/staff", "/api/staff/"], (req, res) => {
+  app.get("/api/staff", (req, res) => {
     try {
       const data = fs.readFileSync(STAFF_FILE, "utf-8");
       res.json(JSON.parse(data));
@@ -191,7 +192,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/staff", "/api/staff/"], (req, res) => {
+  app.post("/api/staff", (req, res) => {
     try {
       fs.writeFileSync(STAFF_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
