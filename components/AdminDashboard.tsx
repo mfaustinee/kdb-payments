@@ -619,54 +619,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
             </div>
             
             <div className="space-y-6">
-                <div className={`p-6 rounded-[32px] border flex items-center justify-between transition-all ${envCheck.supabaseUrl && envCheck.supabaseKey ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                    <div className="flex items-center space-x-3">
-                        <Activity className={`w-5 h-5 ${envCheck.supabaseUrl ? 'text-emerald-500' : 'text-rose-500'}`} />
-                        <div>
-                          <span className={`text-xs font-bold block ${envCheck.supabaseUrl ? 'text-emerald-700' : 'text-rose-700'}`}>Cloud Persistence</span>
-                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Supabase Integration Status</span>
+                <div className={`p-6 rounded-[32px] border flex flex-col space-y-4 transition-all ${envCheck.supabaseUrl && envCheck.supabaseKey ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <Activity className={`w-5 h-5 ${envCheck.supabaseUrl ? 'text-emerald-500' : 'text-rose-500'}`} />
+                            <div>
+                              <span className={`text-xs font-bold block ${envCheck.supabaseUrl ? 'text-emerald-700' : 'text-rose-700'}`}>Cloud Persistence</span>
+                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Supabase Integration Status</span>
+                            </div>
                         </div>
+                        {envCheck.supabaseUrl && envCheck.supabaseKey ? (
+                            <div className="flex items-center space-x-3">
+                              <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CONNECTED</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center space-x-2">
+                              <AlertCircle className="w-4 h-4 text-rose-500" />
+                              <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">OFFLINE MODE</span>
+                            </div>
+                        )}
                     </div>
-                    {envCheck.supabaseUrl && envCheck.supabaseKey ? (
-                        <div className="flex flex-col sm:flex-row items-center gap-3">
-                          <button 
-                            onClick={async () => {
-                              try {
-                                const { DBService } = await import('../services/db.ts');
-                                await DBService.forceSync();
-                                alert("PULL COMPLETE: Local data has been updated with the latest Cloud records.");
-                                onRefresh?.();
-                              } catch (e: any) {
-                                alert("Pull failed: " + e.message);
-                              }
-                            }}
-                            className="w-full sm:w-auto text-[10px] font-black text-emerald-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-50 border border-emerald-100 transition-all active:scale-95 flex items-center justify-center"
-                          >
-                            <Download className="w-3 h-3 mr-2" /> PULL FROM CLOUD
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (!window.confirm("This will push all local records to the Cloud. Existing records with the same ID will be updated. Proceed?")) return;
-                              try {
-                                const { DBService } = await import('../services/db.ts');
-                                await DBService.syncLocalToCloud();
-                                alert("PUSH COMPLETE: Cloud database has been updated with local records.");
-                                onRefresh?.();
-                              } catch (e: any) {
-                                alert("Push failed: " + e.message);
-                              }
-                            }}
-                            className="w-full sm:w-auto text-[10px] font-black text-blue-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-blue-50 border border-blue-100 transition-all active:scale-95 flex items-center justify-center"
-                          >
-                            <Upload className="w-3 h-3 mr-2" /> PUSH TO CLOUD
-                          </button>
-                          <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CONNECTED</span>
-                        </div>
-                    ) : (
-                        <div className="flex items-center space-x-2">
-                          <AlertCircle className="w-4 h-4 text-rose-500" />
-                          <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">OFFLINE MODE</span>
-                        </div>
+
+                    {(!envCheck.supabaseUrl || !envCheck.supabaseKey) && (
+                      <div className="p-4 bg-white/50 rounded-2xl border border-rose-200 space-y-2">
+                        <p className="text-[10px] font-bold text-rose-700 uppercase tracking-tight">Missing Configuration:</p>
+                        <ul className="text-[9px] text-rose-600 space-y-1 list-disc ml-4 font-medium">
+                          {!envCheck.supabaseUrl && <li>VITE_SUPABASE_URL is not set in environment</li>}
+                          {!envCheck.supabaseKey && <li>VITE_SUPABASE_ANON_KEY is not set in environment</li>}
+                        </ul>
+                        <p className="text-[9px] text-slate-500 italic mt-2">Add these to your project settings to enable Cloud Sync.</p>
+                      </div>
+                    )}
+
+                    {envCheck.supabaseUrl && envCheck.supabaseKey && (
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <button 
+                          onClick={async () => {
+                            try {
+                              const { DBService } = await import('../services/db.ts');
+                              await DBService.forceSync();
+                              alert("PULL COMPLETE: Local data has been updated with the latest Cloud records.");
+                              onRefresh?.();
+                            } catch (e: any) {
+                              alert("Pull failed: " + e.message);
+                            }
+                          }}
+                          className="w-full sm:w-auto text-[10px] font-black text-emerald-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-50 border border-emerald-100 transition-all active:scale-95 flex items-center justify-center"
+                        >
+                          <Download className="w-3 h-3 mr-2" /> PULL FROM CLOUD
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            if (!window.confirm("This will push all local records to the Cloud. Existing records with the same ID will be updated. Proceed?")) return;
+                            try {
+                              const { DBService } = await import('../services/db.ts');
+                              await DBService.syncLocalToCloud();
+                              alert("PUSH COMPLETE: Cloud database has been updated with local records.");
+                              onRefresh?.();
+                            } catch (e: any) {
+                              alert("Push failed: " + e.message);
+                            }
+                          }}
+                          className="w-full sm:w-auto text-[10px] font-black text-blue-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-blue-50 border border-blue-100 transition-all active:scale-95 flex items-center justify-center"
+                        >
+                          <Upload className="w-3 h-3 mr-2" /> PUSH TO CLOUD
+                        </button>
+                      </div>
                     )}
                 </div>
 

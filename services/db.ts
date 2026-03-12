@@ -99,11 +99,16 @@ export const DBService = {
 
     // 2. Cloud Sync (NON-BLOCKING background task)
     if (this.isCloudEnabled()) {
-      supabase!.from('agreements').insert(agreement).then(({ error }) => {
-        if (error && error.code !== '23505') {
-          console.error("[DBService] Background Cloud sync error:", error);
+      console.log("[DBService] Attempting background Cloud sync for:", agreement.id);
+      supabase!.from('agreements').upsert(agreement).then(({ error }) => {
+        if (error) {
+          console.error("[DBService] Background Cloud sync error:", error.message, error.details, error.hint);
+          // If it's a permission error, it's likely RLS
+          if (error.code === '42501') {
+            console.error("[DBService] SECURITY ERROR: Row Level Security (RLS) is likely blocking this insert. Please check your Supabase policies.");
+          }
         } else {
-          console.log("[DBService] Background Cloud sync successful");
+          console.log("[DBService] Background Cloud sync successful for:", agreement.id);
         }
       });
     }
