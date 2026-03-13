@@ -7,20 +7,18 @@ const API_BASE = '/api';
 async function fetchJSON(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
   const contentType = response.headers.get("content-type");
+  const text = await response.text();
   
   if (!response.ok) {
-    let errorDetail = '';
+    let errorDetail = text;
     try {
-      const data = await response.json();
-      errorDetail = data.error || data.message || '';
-    } catch (e) {
-      errorDetail = await response.text();
-    }
+      const data = JSON.parse(text);
+      errorDetail = data.error || data.message || text;
+    } catch (e) {}
     throw new Error(`Server Error (${response.status}): ${errorDetail.substring(0, 100)}`);
   }
   
   if (!contentType || !contentType.includes("application/json")) {
-    const text = await response.text();
     console.error("[DBService] Expected JSON but got:", text.substring(0, 200));
     throw new Error(`Invalid Response: Expected JSON but received ${contentType || 'unknown content'}. 
     This usually means the request hit a webpage instead of an API. 
@@ -29,7 +27,11 @@ async function fetchJSON(url: string, options?: RequestInit) {
     Body Preview: ${text.substring(0, 100)}...`);
   }
   
-  return response.json();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`JSON Parse Error: ${text.substring(0, 100)}`);
+  }
 }
 
 // Initialize Supabase client if environment variables are present
