@@ -7,57 +7,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let DATA_DIR = path.join(process.cwd(), "data");
-
-// Resilient data directory selection
-const tryDataDir = (dir: string) => {
-  try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const testFile = path.join(dir, ".write-test-" + Date.now());
-    fs.writeFileSync(testFile, "test");
-    fs.unlinkSync(testFile);
-    return true;
-  } catch (e) {
-    console.error(`[Server] Directory ${dir} is not writable:`, e);
-    return false;
-  }
-};
-
-if (!tryDataDir(DATA_DIR)) {
-  const fallbackDir = path.join("/tmp", "kdb-data");
-  console.warn(`[Server] Falling back to writable directory: ${fallbackDir}`);
-  
-  // Copy existing data if possible
-  try {
-    if (!fs.existsSync(fallbackDir)) {
-      fs.mkdirSync(fallbackDir, { recursive: true });
-    }
-    const sourceDir = path.join(process.cwd(), "data");
-    if (fs.existsSync(sourceDir)) {
-      const files = fs.readdirSync(sourceDir);
-      for (const file of files) {
-        const src = path.join(sourceDir, file);
-        const dest = path.join(fallbackDir, file);
-        if (fs.statSync(src).isFile()) {
-          fs.copyFileSync(src, dest);
-        }
-      }
-      console.log(`[Server] Seeded fallback directory from ${sourceDir}`);
-    }
-  } catch (e) {
-    console.error("[Server] Failed to seed fallback directory:", e);
-  }
-  
-  DATA_DIR = fallbackDir;
-  if (!tryDataDir(DATA_DIR)) {
-    console.error("[Server] CRITICAL: No writable data directory found!");
-  }
-}
-
-console.log(`[Server] Active data directory: ${DATA_DIR}`);
-
+const DATA_DIR = path.join(process.cwd(), "data");
 const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
@@ -69,59 +19,14 @@ const logToFile = (message: string) => {
   const logEntry = `[${timestamp}] ${message}\n`;
   console.log(logEntry.trim());
   try {
-    if (fs.existsSync(DATA_DIR)) {
-      fs.appendFileSync(LOG_FILE, logEntry);
-      // Keep log file small (last 1000 lines)
-      if (fs.existsSync(LOG_FILE)) {
-        const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
-        if (logs.length > 1000) {
-          fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
-        }
-      }
+    fs.appendFileSync(LOG_FILE, logEntry);
+    // Keep log file small (last 1000 lines)
+    const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
+    if (logs.length > 1000) {
+      fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
     }
   } catch (e) {
-    // Silent fail for logging to file in read-only environments
-  }
-};
-
-const INITIAL_DEBTORS = [
-  {
-    id: 'D001',
-    dboName: 'Sunrise Dairy Ltd',
-    premiseName: 'Sunrise Main Depot',
-    permitNo: 'KDB/MB/0001/0001234/2024',
-    location: 'Thika Road, Ruiru',
-    county: 'Kiambu',
-    arrearsBreakdown: [{ id: '1', month: 'January 2024', amount: 150000 }],
-    totalArrears: 150000,
-    totalArrearsWords: 'One Hundred and Fifty Thousand Shillings',
-    arrearsPeriod: 'Jan 2024',
-    debitNoteNo: 'DN/2024/552',
-    tel: '0712345678',
-    installments: [{ no: 1, period: 'Jan 2024', dueDate: '', amount: 150000 }]
-  }
-];
-
-const ensureFile = (file: string, defaultData: any) => {
-  if (!fs.existsSync(file)) {
-    console.log(`[Server] Creating ${file} with initial data`);
-    fs.writeFileSync(file, JSON.stringify(defaultData, null, 2));
-  }
-};
-
-ensureFile(AGREEMENTS_FILE, []);
-ensureFile(DEBTORS_FILE, INITIAL_DEBTORS);
-ensureFile(STAFF_FILE, { officialSignature: "" });
-
-const readJSON = (file: string, defaultData: any) => {
-  try {
-    if (!fs.existsSync(file)) return defaultData;
-    const content = fs.readFileSync(file, "utf-8").trim();
-    if (!content) return defaultData;
-    return JSON.parse(content);
-  } catch (e) {
-    console.error(`Error reading/parsing ${file}:`, e);
-    return defaultData;
+    console.error("Failed to write to log file:", e);
   }
 };
 
@@ -151,11 +56,7 @@ async function startServer() {
     res.json({ 
       status: "ok", 
       time: new Date().toISOString(),
-      env: process.env.NODE_ENV,
-      cwd: process.cwd(),
-      dataDir: DATA_DIR,
-      dataDirExists: fs.existsSync(DATA_DIR),
-      files: fs.existsSync(DATA_DIR) ? fs.readdirSync(DATA_DIR) : []
+      writable: fs.existsSync(DATA_DIR) 
     });
   });
 
@@ -173,8 +74,8 @@ async function startServer() {
 
   app.get(["/api/agreements", "/api/agreements/"], (req, res) => {
     try {
-      const data = readJSON(AGREEMENTS_FILE, []);
-      res.json(data);
+      const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
+      res.json(JSON.parse(data));
     } catch (error) {
       logToFile(`Error reading agreements: ${error}`);
       res.status(500).json({ error: "Failed to read agreements" });
@@ -183,7 +84,7 @@ async function startServer() {
 
   app.post(["/api/agreements", "/api/agreements/"], (req, res) => {
     try {
-      const agreements = readJSON(AGREEMENTS_FILE, []);
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const newAgreement = req.body;
       const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
       if (index !== -1) agreements[index] = newAgreement;
@@ -199,7 +100,7 @@ async function startServer() {
 
   const handleUpdate = (req: any, res: any) => {
     try {
-      const agreements = readJSON(AGREEMENTS_FILE, []);
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
       const index = agreements.findIndex((a: any) => a.id === id);
       if (index !== -1) {
@@ -221,7 +122,7 @@ async function startServer() {
 
   app.delete(["/api/agreements/:id", "/api/agreements/:id/"], (req, res) => {
     try {
-      const agreements = readJSON(AGREEMENTS_FILE, []);
+      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
       const { id } = req.params;
       const filtered = agreements.filter((a: any) => a.id !== id);
       fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(filtered, null, 2));
@@ -246,8 +147,8 @@ async function startServer() {
 
   app.get(["/api/debtors", "/api/debtors/"], (req, res) => {
     try {
-      const data = readJSON(DEBTORS_FILE, INITIAL_DEBTORS);
-      res.json(data);
+      const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
+      res.json(JSON.parse(data));
     } catch (error) {
       res.status(500).json({ error: "Failed to read debtors" });
     }
