@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
@@ -29,6 +28,28 @@ const tryDataDir = (dir: string) => {
 if (!tryDataDir(DATA_DIR)) {
   const fallbackDir = path.join("/tmp", "kdb-data");
   console.warn(`[Server] Falling back to writable directory: ${fallbackDir}`);
+  
+  // Copy existing data if possible
+  try {
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    const sourceDir = path.join(process.cwd(), "data");
+    if (fs.existsSync(sourceDir)) {
+      const files = fs.readdirSync(sourceDir);
+      for (const file of files) {
+        const src = path.join(sourceDir, file);
+        const dest = path.join(fallbackDir, file);
+        if (fs.statSync(src).isFile()) {
+          fs.copyFileSync(src, dest);
+        }
+      }
+      console.log(`[Server] Seeded fallback directory from ${sourceDir}`);
+    }
+  } catch (e) {
+    console.error("[Server] Failed to seed fallback directory:", e);
+  }
+  
   DATA_DIR = fallbackDir;
   if (!tryDataDir(DATA_DIR)) {
     console.error("[Server] CRITICAL: No writable data directory found!");
@@ -48,14 +69,18 @@ const logToFile = (message: string) => {
   const logEntry = `[${timestamp}] ${message}\n`;
   console.log(logEntry.trim());
   try {
-    fs.appendFileSync(LOG_FILE, logEntry);
-    // Keep log file small (last 1000 lines)
-    const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
-    if (logs.length > 1000) {
-      fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
+    if (fs.existsSync(DATA_DIR)) {
+      fs.appendFileSync(LOG_FILE, logEntry);
+      // Keep log file small (last 1000 lines)
+      if (fs.existsSync(LOG_FILE)) {
+        const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
+        if (logs.length > 1000) {
+          fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
+        }
+      }
     }
   } catch (e) {
-    console.error("Failed to write to log file:", e);
+    // Silent fail for logging to file in read-only environments
   }
 };
 
@@ -268,11 +293,16 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.error("Failed to initialize Vite middleware:", e);
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
