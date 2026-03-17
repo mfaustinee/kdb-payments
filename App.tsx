@@ -373,7 +373,7 @@ const App: React.FC = () => {
       <footer className="py-8 border-t bg-white text-center">
         <div className="max-w-7xl mx-auto px-4 flex flex-col items-center space-y-4">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-            © 2024 Kenya Dairy Board • Regulatory Compliance Division
+            © 2026 Kenya Dairy Board • Regulatory Compliance Division
           </p>
         </div>
       </footer>
