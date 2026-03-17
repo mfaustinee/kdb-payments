@@ -1,5 +1,6 @@
-
 import React, { ErrorInfo, ReactNode } from 'react';
+
+console.log("[ErrorBoundary] Module loaded");
 
 interface Props {
   children: ReactNode;
@@ -9,8 +10,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
 }
-
-export class ErrorBoundary extends React.Component<Props, State> {
+export default class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {

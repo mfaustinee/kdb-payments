@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+console.log("[Server] Entry point reached.");
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -13,26 +15,40 @@ const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
 const LOG_FILE = path.join(DATA_DIR, "server.log");
 
-// Logging utility
+// Logging utility - Optimized to avoid reading entire file on every log
 const logToFile = (message: string) => {
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] ${message}\n`;
   console.log(logEntry.trim());
   try {
     fs.appendFileSync(LOG_FILE, logEntry);
-    // Keep log file small (last 1000 lines)
-    const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
-    if (logs.length > 1000) {
-      fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
-    }
+    // Log rotation handled separately or less frequently to save memory
   } catch (e) {
     console.error("Failed to write to log file:", e);
   }
 };
 
+// Periodic log rotation (every hour) to keep file size manageable
+setInterval(() => {
+  try {
+    if (fs.existsSync(LOG_FILE)) {
+      const stats = fs.statSync(LOG_FILE);
+      if (stats.size > 1024 * 1024) { // 1MB limit
+        const logs = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
+        if (logs.length > 1000) {
+          fs.writeFileSync(LOG_FILE, logs.slice(-1000).join('\n'));
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Log rotation failed:", e);
+  }
+}, 3600000);
+
 async function startServer() {
-  const app = express();
-  const PORT = 3000;
+  try {
+    const app = express();
+    const PORT = 3000;
 
   // Improved CORS configuration
   app.use(cors({
@@ -40,18 +56,20 @@ async function startServer() {
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
   }));
-  app.options('*', cors()); 
+  app.options('*all', cors()); 
   
-  app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-  // Detailed request logging
+  // Detailed request logging with status codes
   app.use((req, res, next) => {
-    logToFile(`${req.method} ${req.url}`);
+    res.on('finish', () => {
+      logToFile(`${req.method} ${req.url} ${res.statusCode}`);
+    });
     next();
   });
 
-  // API Routes (Directly on app for maximum reliability)
+  // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ 
       status: "ok", 
@@ -72,9 +90,9 @@ async function startServer() {
     }
   });
 
-  app.get(["/api/agreements", "/api/agreements/"], (req, res) => {
+  app.get(["/api/agreements", "/api/agreements/"], async (req, res) => {
     try {
-      const data = fs.readFileSync(AGREEMENTS_FILE, "utf-8");
+      const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
       res.json(JSON.parse(data));
     } catch (error) {
       logToFile(`Error reading agreements: ${error}`);
@@ -82,14 +100,15 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/agreements", "/api/agreements/"], (req, res) => {
+  app.post(["/api/agreements", "/api/agreements/"], async (req, res) => {
     try {
-      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+      const agreements = JSON.parse(data);
       const newAgreement = req.body;
       const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
       if (index !== -1) agreements[index] = newAgreement;
       else agreements.push(newAgreement);
-      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+      await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
       logToFile(`Saved agreement: ${newAgreement.id}`);
       res.json({ success: true });
     } catch (error) {
@@ -98,14 +117,15 @@ async function startServer() {
     }
   });
 
-  const handleUpdate = (req: any, res: any) => {
+  const handleUpdate = async (req: any, res: any) => {
     try {
-      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
+      const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+      const agreements = JSON.parse(data);
       const { id } = req.params;
       const index = agreements.findIndex((a: any) => a.id === id);
       if (index !== -1) {
         agreements[index] = { ...agreements[index], ...req.body };
-        fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
+        await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
         logToFile(`Updated agreement: ${id}`);
         res.json({ success: true });
       } else {
@@ -117,26 +137,9 @@ async function startServer() {
     }
   };
 
-  app.patch(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
-  app.post(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
-
-  app.delete(["/api/agreements/:id", "/api/agreements/:id/"], (req, res) => {
+  app.post(["/api/agreements/sync", "/api/agreements/sync/"], async (req, res) => {
     try {
-      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
-      const { id } = req.params;
-      const filtered = agreements.filter((a: any) => a.id !== id);
-      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(filtered, null, 2));
-      logToFile(`Deleted agreement: ${id}`);
-      res.json({ success: true });
-    } catch (error) {
-      logToFile(`Error deleting agreement ${req.params.id}: ${error}`);
-      res.status(500).json({ error: "Failed to delete agreement" });
-    }
-  });
-
-  app.post(["/api/agreements/sync", "/api/agreements/sync/"], (req, res) => {
-    try {
-      fs.writeFileSync(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
+      await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
       logToFile(`Synced ${req.body.length} agreements`);
       res.json({ success: true });
     } catch (error) {
@@ -145,46 +148,66 @@ async function startServer() {
     }
   });
 
-  app.get(["/api/debtors", "/api/debtors/"], (req, res) => {
+  app.patch(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
+  app.post(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
+
+  app.delete(["/api/agreements/:id", "/api/agreements/:id/"], async (req, res) => {
     try {
-      const data = fs.readFileSync(DEBTORS_FILE, "utf-8");
+      const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+      const agreements = JSON.parse(data);
+      const { id } = req.params;
+      const filtered = agreements.filter((a: any) => a.id !== id);
+      await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(filtered, null, 2));
+      logToFile(`Deleted agreement: ${id}`);
+      res.json({ success: true });
+    } catch (error) {
+      logToFile(`Error deleting agreement ${req.params.id}: ${error}`);
+      res.status(500).json({ error: "Failed to delete agreement" });
+    }
+  });
+
+  app.get(["/api/debtors", "/api/debtors/"], async (req, res) => {
+    try {
+      const data = await fs.promises.readFile(DEBTORS_FILE, "utf-8");
       res.json(JSON.parse(data));
     } catch (error) {
       res.status(500).json({ error: "Failed to read debtors" });
     }
   });
 
-  app.post(["/api/debtors", "/api/debtors/"], (req, res) => {
+  app.post(["/api/debtors", "/api/debtors/"], async (req, res) => {
     try {
-      fs.writeFileSync(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
+      await fs.promises.writeFile(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save debtors" });
     }
   });
 
-  app.get(["/api/staff", "/api/staff/"], (req, res) => {
+  app.get(["/api/staff", "/api/staff/"], async (req, res) => {
     try {
-      const data = fs.readFileSync(STAFF_FILE, "utf-8");
+      const data = await fs.promises.readFile(STAFF_FILE, "utf-8");
       res.json(JSON.parse(data));
     } catch (error) {
       res.status(500).json({ error: "Failed to read staff config" });
     }
   });
 
-  app.post(["/api/staff", "/api/staff/"], (req, res) => {
+  app.post(["/api/staff", "/api/staff/"], async (req, res) => {
     try {
-      fs.writeFileSync(STAFF_FILE, JSON.stringify(req.body, null, 2));
+      await fs.promises.writeFile(STAFF_FILE, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save staff config" });
     }
   });
 
-  app.get("/api/status", (req, res) => {
+  app.get("/api/status", async (req, res) => {
     try {
-      const agreements = JSON.parse(fs.readFileSync(AGREEMENTS_FILE, "utf-8"));
-      const debtors = JSON.parse(fs.readFileSync(DEBTORS_FILE, "utf-8"));
+      const agreementsData = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+      const debtorsData = await fs.promises.readFile(DEBTORS_FILE, "utf-8");
+      const agreements = JSON.parse(agreementsData);
+      const debtors = JSON.parse(debtorsData);
       res.json({
         agreementsCount: agreements.length,
         debtorsCount: debtors.length,
@@ -199,7 +222,7 @@ async function startServer() {
   });
 
   // API Catch-all
-  app.all("/api/*", (req, res) => {
+  app.all("/api/*all", (req, res) => {
     logToFile(`API 404: ${req.method} ${req.url}`);
     res.status(404).json({ 
       error: "Not Found", 
@@ -217,24 +240,30 @@ async function startServer() {
         appType: "spa",
       });
       app.use(vite.middlewares);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to initialize Vite middleware:", e);
     }
   } else {
+    console.log("[Server] Serving static files from dist...");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
+  console.log(`[Server] Attempting to listen on port ${PORT}...`);
   if (process.env.NODE_ENV !== "test" && process.env.VERCEL !== "1") {
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`[Server] SUCCESS: Running on http://0.0.0.0:${PORT}`);
     });
   }
 
   return app;
+  } catch (error: any) {
+    console.error("[Server] CRITICAL STARTUP ERROR:", error);
+    throw error;
+  }
 }
 
 export const appPromise = startServer();

@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { AgreementForm } from './components/AgreementForm.tsx';
-import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { SuccessScreen } from './components/SuccessScreen.tsx';
-import { AgreementData, DebtorRecord, ArrearItem, StaffConfig } from './types.ts';
+import { AgreementForm } from './components/AgreementForm';
+import { AdminDashboard } from './components/AdminDashboard';
+import { SuccessScreen } from './components/SuccessScreen';
+import { AgreementData, DebtorRecord, ArrearItem, StaffConfig } from './types';
 import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2, LogOut, Lock } from 'lucide-react';
-import { DBService } from './services/db.ts';
+import { DBService } from './services/db';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -28,10 +28,12 @@ const App: React.FC = () => {
     loadDatabase();
 
     // Smart Polling for multi-device sync (every 60 seconds)
-    // This replaces Realtime to improve performance and stability
+    // Only polls when the tab is visible to save resources
     const pollInterval = setInterval(() => {
-      console.log("[App] Background sync: Checking for updates...");
-      loadDatabase();
+      if (document.visibilityState === 'visible') {
+        console.log("[App] Background sync: Checking for updates...");
+        loadDatabase();
+      }
     }, 60000);
 
     // Also sync when the user returns to the tab
@@ -66,6 +68,25 @@ const App: React.FC = () => {
   };
 
   const loadDatabase = async () => {
+    // 1. Load from cache immediately for zero-latency UI
+    const cachedAgreements = localStorage.getItem('kdb_agreements_fallback');
+    const cachedDebtors = localStorage.getItem('kdb_debtors_fallback');
+    const cachedStaff = localStorage.getItem('kdb_staff_fallback');
+    
+    if (cachedAgreements || cachedDebtors || cachedStaff) {
+      try {
+        if (cachedAgreements) {
+          const parsed = JSON.parse(cachedAgreements);
+          setAgreements(parsed);
+          setUnreadCount(parsed.filter((a: any) => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+        }
+        if (cachedDebtors) setDebtors(JSON.parse(cachedDebtors));
+        if (cachedStaff) setStaffConfig(JSON.parse(cachedStaff));
+      } catch (e) {
+        console.error("[App] Cache parse error:", e);
+      }
+    }
+
     setIsSyncing(true);
     try {
       const [storedAgreements, storedDebtors, storedStaff] = await Promise.all([
@@ -77,6 +98,11 @@ const App: React.FC = () => {
       const uniqueAgreements = Array.from(new Map(storedAgreements.map(a => [a.id, a])).values());
       setAgreements(uniqueAgreements);
       
+      // Update cache
+      localStorage.setItem('kdb_agreements_fallback', JSON.stringify(uniqueAgreements));
+      localStorage.setItem('kdb_debtors_fallback', JSON.stringify(storedDebtors));
+      localStorage.setItem('kdb_staff_fallback', JSON.stringify(storedStaff));
+
       // Check for direct link ID
       const urlParams = new URLSearchParams(window.location.search);
       const id = urlParams.get('id');
@@ -92,7 +118,6 @@ const App: React.FC = () => {
 
       const uniqueDebtors = Array.from(new Map(storedDebtors.map(d => [d.id, d])).values());
       setDebtors(uniqueDebtors);
-      setStaffConfig(storedStaff);
     } catch (error) {
       console.error("[App] Failed to load database:", error);
     } finally {
@@ -345,7 +370,12 @@ const App: React.FC = () => {
         </Routes>
       </main>
       
-      <footer className="py-6 border-t bg-white text-center">
+      <footer className="py-8 border-t bg-white text-center">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col items-center space-y-4">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+            © 2024 Kenya Dairy Board • Regulatory Compliance Division
+          </p>
+        </div>
       </footer>
     </div>
   );

@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types.ts';
+import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types';
 import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity } from 'lucide-react';
-import { PDFPreview } from './PDFPreview.tsx';
-import { downloadAgreementPDF } from '../services/pdf.ts';
-import { numberToWords } from '../utils/numberToWords.ts';
+import { PDFPreview } from './PDFPreview';
+import { downloadAgreementPDF } from '../services/pdf';
+import { numberToWords } from '../utils/numberToWords';
 
 interface AdminDashboardProps {
   agreements: AgreementData[];
