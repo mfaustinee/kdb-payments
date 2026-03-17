@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -58,23 +59,38 @@ async function startServer() {
   }));
   app.options('*all', cors()); 
   
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  app.use(compression());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  // Detailed request logging with status codes
+  // Request logging middleware - only log errors to file to keep it clean
   app.use((req, res, next) => {
     res.on('finish', () => {
-      logToFile(`${req.method} ${req.url} ${res.statusCode}`);
+      if (res.statusCode >= 400) {
+        logToFile(`${req.method} ${req.url} ${res.statusCode}`);
+      }
     });
     next();
   });
 
   // API Routes
   app.get("/api/health", (req, res) => {
+    let writable = false;
+    try {
+      const testFile = path.join(DATA_DIR, ".write_test");
+      fs.writeFileSync(testFile, "test");
+      fs.unlinkSync(testFile);
+      writable = true;
+    } catch (e) {
+      writable = false;
+    }
+
     res.json({ 
       status: "ok", 
       time: new Date().toISOString(),
-      writable: fs.existsSync(DATA_DIR) 
+      dataDirExists: fs.existsSync(DATA_DIR),
+      writable: writable,
+      env: process.env.NODE_ENV
     });
   });
 
@@ -92,8 +108,16 @@ async function startServer() {
 
   app.get(["/api/agreements", "/api/agreements/"], async (req, res) => {
     try {
+      if (!fs.existsSync(AGREEMENTS_FILE)) {
+        return res.json([]);
+      }
       const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
-      res.json(JSON.parse(data));
+      try {
+        res.json(JSON.parse(data));
+      } catch (parseError) {
+        logToFile(`Error parsing agreements JSON: ${parseError}`);
+        res.json([]); // Return empty array if corrupted
+      }
     } catch (error) {
       logToFile(`Error reading agreements: ${error}`);
       res.status(500).json({ error: "Failed to read agreements" });
@@ -102,49 +126,109 @@ async function startServer() {
 
   app.post(["/api/agreements", "/api/agreements/"], async (req, res) => {
     try {
-      const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
-      const agreements = JSON.parse(data);
+      logToFile(`Attempting to save agreement: ${req.body?.id}`);
+      if (!req.body || !req.body.id) {
+        logToFile("Error: Missing agreement ID in request body");
+        return res.status(400).json({ error: "Missing agreement ID" });
+      }
+
+      let agreements = [];
+      try {
+        const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+        agreements = JSON.parse(data);
+      } catch (readError) {
+        logToFile(`Warning: Could not read agreements file, starting fresh: ${readError}`);
+        agreements = [];
+      }
+
       const newAgreement = req.body;
       const index = agreements.findIndex((a: any) => a.id === newAgreement.id);
-      if (index !== -1) agreements[index] = newAgreement;
-      else agreements.push(newAgreement);
+      if (index !== -1) {
+        logToFile(`Updating existing agreement: ${newAgreement.id}`);
+        agreements[index] = newAgreement;
+      } else {
+        logToFile(`Adding new agreement: ${newAgreement.id}`);
+        agreements.push(newAgreement);
+      }
+
       await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-      logToFile(`Saved agreement: ${newAgreement.id}`);
+      logToFile(`Successfully saved agreement: ${newAgreement.id}`);
       res.json({ success: true });
-    } catch (error) {
-      logToFile(`Error saving agreement: ${error}`);
-      res.status(500).json({ error: "Failed to save agreement" });
+    } catch (error: any) {
+      logToFile(`CRITICAL Error saving agreement: ${error.message}\nStack: ${error.stack}`);
+      res.status(500).json({ error: "Failed to save agreement", details: error.message });
     }
   });
 
   const handleUpdate = async (req: any, res: any) => {
     try {
-      const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
-      const agreements = JSON.parse(data);
       const { id } = req.params;
+      logToFile(`Attempting to update agreement: ${id}`);
+      
+      let agreements = [];
+      try {
+        const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+        agreements = JSON.parse(data);
+      } catch (readError) {
+        logToFile(`Error reading agreements during update: ${readError}`);
+        return res.status(500).json({ error: "Failed to read agreements" });
+      }
+
       const index = agreements.findIndex((a: any) => a.id === id);
       if (index !== -1) {
         agreements[index] = { ...agreements[index], ...req.body };
         await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(agreements, null, 2));
-        logToFile(`Updated agreement: ${id}`);
+        logToFile(`Successfully updated agreement: ${id}`);
         res.json({ success: true });
       } else {
+        logToFile(`Error: Agreement not found for update: ${id}`);
         res.status(404).json({ error: "Not found" });
       }
-    } catch (error) {
-      logToFile(`Error updating agreement ${req.params.id}: ${error}`);
-      res.status(500).json({ error: "Failed to update agreement" });
+    } catch (error: any) {
+      logToFile(`CRITICAL Error updating agreement: ${error.message}`);
+      res.status(500).json({ error: "Failed to update agreement", details: error.message });
     }
   };
 
   app.post(["/api/agreements/sync", "/api/agreements/sync/"], async (req, res) => {
     try {
-      await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(req.body, null, 2));
-      logToFile(`Synced ${req.body.length} agreements`);
-      res.json({ success: true });
-    } catch (error) {
-      logToFile(`Error syncing agreements: ${error}`);
-      res.status(500).json({ error: "Failed to sync agreements" });
+      const incomingAgreements = req.body;
+      logToFile(`Sync request received with ${incomingAgreements?.length} agreements`);
+      
+      if (!Array.isArray(incomingAgreements)) {
+        logToFile("Error: Sync request body is not an array");
+        return res.status(400).json({ error: "Invalid data format, expected array" });
+      }
+
+      let existingAgreements = [];
+      try {
+        if (fs.existsSync(AGREEMENTS_FILE)) {
+          const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
+          existingAgreements = JSON.parse(data);
+        }
+      } catch (readError) {
+        logToFile(`Warning: Could not read agreements file during sync, starting fresh: ${readError}`);
+        existingAgreements = [];
+      }
+
+      let updatedCount = 0;
+      incomingAgreements.forEach(incoming => {
+        if (!incoming.id) return;
+        const index = existingAgreements.findIndex((a: any) => a.id === incoming.id);
+        if (index !== -1) {
+          existingAgreements[index] = { ...existingAgreements[index], ...incoming };
+        } else {
+          existingAgreements.push(incoming);
+        }
+        updatedCount++;
+      });
+
+      await fs.promises.writeFile(AGREEMENTS_FILE, JSON.stringify(existingAgreements, null, 2));
+      logToFile(`Successfully synced ${updatedCount} agreements`);
+      res.json({ success: true, synced: updatedCount });
+    } catch (error: any) {
+      logToFile(`CRITICAL Error syncing agreements: ${error.message}\nStack: ${error.stack}`);
+      res.status(500).json({ error: "Failed to sync agreements", details: error.message });
     }
   });
 
@@ -168,8 +252,16 @@ async function startServer() {
 
   app.get(["/api/debtors", "/api/debtors/"], async (req, res) => {
     try {
+      if (!fs.existsSync(DEBTORS_FILE)) {
+        return res.json([]);
+      }
       const data = await fs.promises.readFile(DEBTORS_FILE, "utf-8");
-      res.json(JSON.parse(data));
+      try {
+        res.json(JSON.parse(data));
+      } catch (parseError) {
+        logToFile(`Error parsing debtors JSON: ${parseError}`);
+        res.json([]);
+      }
     } catch (error) {
       res.status(500).json({ error: "Failed to read debtors" });
     }
@@ -177,17 +269,28 @@ async function startServer() {
 
   app.post(["/api/debtors", "/api/debtors/"], async (req, res) => {
     try {
+      logToFile(`Attempting to save ${req.body?.length} debtors`);
       await fs.promises.writeFile(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
+      logToFile(`Successfully saved debtors`);
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save debtors" });
+    } catch (error: any) {
+      logToFile(`CRITICAL Error saving debtors: ${error.message}`);
+      res.status(500).json({ error: "Failed to save debtors", details: error.message });
     }
   });
 
   app.get(["/api/staff", "/api/staff/"], async (req, res) => {
     try {
+      if (!fs.existsSync(STAFF_FILE)) {
+        return res.json({ officialSignature: '' });
+      }
       const data = await fs.promises.readFile(STAFF_FILE, "utf-8");
-      res.json(JSON.parse(data));
+      try {
+        res.json(JSON.parse(data));
+      } catch (parseError) {
+        logToFile(`Error parsing staff JSON: ${parseError}`);
+        res.json({ officialSignature: '' });
+      }
     } catch (error) {
       res.status(500).json({ error: "Failed to read staff config" });
     }
@@ -195,10 +298,13 @@ async function startServer() {
 
   app.post(["/api/staff", "/api/staff/"], async (req, res) => {
     try {
+      logToFile(`Attempting to save staff config`);
       await fs.promises.writeFile(STAFF_FILE, JSON.stringify(req.body, null, 2));
+      logToFile(`Successfully saved staff config`);
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save staff config" });
+    } catch (error: any) {
+      logToFile(`CRITICAL Error saving staff config: ${error.message}`);
+      res.status(500).json({ error: "Failed to save staff config", details: error.message });
     }
   });
 
@@ -250,6 +356,36 @@ async function startServer() {
     app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
+  }
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    const status = err.status || err.statusCode || 500;
+    logToFile(`UNHANDLED ERROR: ${err.message}\nStack: ${err.stack}`);
+    res.status(status).json({
+      error: "Internal Server Error",
+      message: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  });
+
+  // Ensure data directory exists
+  if (!fs.existsSync(DATA_DIR)) {
+    console.log(`[Server] Creating data directory: ${DATA_DIR}`);
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  // Ensure initial files exist
+  [AGREEMENTS_FILE, DEBTORS_FILE].forEach(file => {
+    if (!fs.existsSync(file)) {
+      console.log(`[Server] Initializing file: ${file}`);
+      fs.writeFileSync(file, JSON.stringify([], null, 2));
+    }
+  });
+
+  if (!fs.existsSync(STAFF_FILE)) {
+    console.log(`[Server] Initializing staff file: ${STAFF_FILE}`);
+    fs.writeFileSync(STAFF_FILE, JSON.stringify({ officialSignature: '' }, null, 2));
   }
 
   console.log(`[Server] Attempting to listen on port ${PORT}...`);
