@@ -23,5 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-.vercel
-.env*.local
+# Data storage
+data/
+*.ts.test
+test_*.ts
+get_size.ts
+check_json.ts
+vercel-env-import.txt
