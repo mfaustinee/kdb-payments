@@ -31,10 +31,12 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
     setVerifyError('');
+    
     const found = debtors.find(d => 
       d.permitNo.toLowerCase() === lookupPermit.toLowerCase() && 
       (d.tel === lookupSecret || d.debitNoteNo.toLowerCase() === lookupSecret.toLowerCase())
     );
+
     if (found) {
       const existing = agreements.find(a => a.permitNo.toLowerCase() === found.permitNo.toLowerCase());
       if (existing) {
@@ -58,7 +60,10 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       setFormData(prev => ({ ...prev, ...debtorData, installments: found.installments.map(i => ({ ...i })) }));
       setStep(1);
     } else {
-      setVerifyError('Verification failed. Use your Regulatory Permit No and Phone/Debit Note No.');
+      // If not found, check if we are still syncing
+      if (lookupPermit && lookupSecret) {
+        setVerifyError('Verification failed. Use your Regulatory Permit No and Phone/Debit Note No. (If you just joined, please wait a few seconds for sync to complete)');
+      }
     }
   };
 
@@ -82,6 +87,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
   };
 
   const handleFinalSubmit = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     const statuses = [
       'Compiling legal agreement...',
@@ -91,14 +97,21 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
     ];
 
     try {
+      // Fast progress for UI feedback
       for (const status of statuses) {
         setTransmissionStatus(status);
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 600));
       }
       
+      // Call onSubmit and wait for it
       await onSubmit(formData as AgreementData);
-    } catch (e) {
+      
+      // If we are still here (e.g. navigation didn't happen yet), reset
       setIsSubmitting(false);
+    } catch (e: any) {
+      console.error("[AgreementForm] Submission error:", e);
+      setIsSubmitting(false);
+      alert(`Submission failed: ${e.message || 'Unknown error'}. Please try again.`);
     }
   };
 
@@ -236,7 +249,15 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                       <tr key={i} className="bg-white hover:bg-slate-50/50 transition-colors">
                         <td className="px-8 py-5 font-bold text-slate-400">Inst. {inst.no} ({inst.period})</td>
                         <td className="px-8 py-5 font-black text-emerald-600 text-lg">KES {inst.amount.toLocaleString()}</td>
-                        <td className="px-8 py-5"><input required type="date" value={inst.dueDate || ''} onChange={e => updateInstallment(i, e.target.value)} className="w-full px-4 py-3 border-2 border-slate-50 rounded-xl outline-none focus:border-emerald-500 transition-all font-bold" /></td>
+                        <td className="px-8 py-5">
+                          <input 
+                            required 
+                            type="date" 
+                            value={inst.dueDate || ''} 
+                            onChange={e => updateInstallment(i, e.target.value)} 
+                            className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl outline-none focus:border-emerald-500 transition-all font-bold bg-white text-slate-900" 
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

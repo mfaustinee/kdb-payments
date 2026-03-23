@@ -58,8 +58,20 @@ export const DBService = {
   async getAgreements(): Promise<AgreementData[]> {
     const isCloud = this.isCloudEnabled();
 
-    // 1. Start Cloud Fetch in background (don't await yet)
-    const cloudFetchPromise = isCloud ? (async () => {
+    // 1. Try Local API first (usually faster than Cloud)
+    try {
+      const localData = await fetchJSON(`${API_BASE}/agreements?t=${Date.now()}`);
+      if (localData && localData.length > 0) {
+        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(localData));
+        // Sync to cloud in background if needed
+        return localData;
+      }
+    } catch (error) {
+      console.warn("[DBService] Local fetch failed:", error);
+    }
+
+    // 2. If Local fails or is empty, try Cloud
+    if (isCloud) {
       try {
         const { data, error } = await supabase!
           .from('agreements')
@@ -67,39 +79,25 @@ export const DBService = {
           .order('submittedAt', { ascending: false });
         
         if (!error && data) {
-          // Update local cache in background
           localStorage.setItem('kdb_agreements_fallback', JSON.stringify(data));
-          this.syncAgreementsToLocal(data).catch(() => {});
           return data as AgreementData[];
         }
       } catch (error) {
         console.error("[DBService] Cloud fetch error:", error);
       }
-      return null;
-    })() : Promise.resolve(null);
-
-    // 2. Try Local API immediately (Fastest)
-    try {
-      const localData = await fetchJSON(`${API_BASE}/agreements?t=${Date.now()}`);
-      if (localData && localData.length > 0) {
-        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(localData));
-        // Return local data immediately, cloud will sync in background for next time
-        return localData;
-      }
-    } catch (error) {
-      console.error("[DBService] Local fetch error:", error);
     }
 
-    // 3. Fallback to localStorage (Instant)
+    // 3. Final Fallback to localStorage
     const cached = localStorage.getItem('kdb_agreements_fallback');
     if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed.length > 0) return parsed;
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return [];
+      }
     }
 
-    // 4. Only if local is empty, wait for cloud (Slowest)
-    const cloudData = await cloudFetchPromise;
-    return cloudData || [];
+    return [];
   },
 
   async syncAgreementsToLocal(agreements: AgreementData[]): Promise<void> {
@@ -115,98 +113,119 @@ export const DBService = {
   },
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
-    // 1. Local Save FIRST (Blocking for UI feedback)
-    try {
-      await fetchJSON(`${API_BASE}/agreements`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(agreement)
-      });
-    } catch (error) {
-      console.error("[DBService] Local save failed:", error);
-      throw error; // Re-throw so UI can show error
-    }
-
-    // 2. Cloud Sync (NON-BLOCKING background task)
-    if (this.isCloudEnabled()) {
-      console.log("[DBService] Attempting background Cloud sync for:", agreement.id);
-      supabase!.from('agreements').upsert(agreement).then(({ error }) => {
-        if (error) {
-          console.error("[DBService] Background Cloud sync error:", error.message, error.details, error.hint);
-          // If it's a permission error, it's likely RLS
-          if (error.code === '42501') {
-            console.error("[DBService] SECURITY ERROR: Row Level Security (RLS) is likely blocking this insert. Please check your Supabase policies.");
-          }
-        } else {
-          console.log("[DBService] Background Cloud sync successful for:", agreement.id);
-        }
-      });
-    }
-
-    // Update local fallback
+    const isCloud = this.isCloudEnabled();
+    
+    // Update local fallback cache immediately (Optimistic)
     const local = localStorage.getItem('kdb_agreements_fallback');
     let agreements = local ? JSON.parse(local) : [];
     const index = agreements.findIndex((a: any) => a.id === agreement.id);
     if (index !== -1) agreements[index] = agreement;
     else agreements.push(agreement);
     localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+
+    // 1. Cloud Save (Non-blocking background task)
+    if (isCloud) {
+      (async () => {
+        try {
+          const { error } = await supabase!.from('agreements').upsert(agreement);
+          if (error) console.error("[DBService] Background Cloud save failed:", error.message);
+          else console.log("[DBService] Background Cloud save successful:", agreement.id);
+        } catch (e) {
+          console.error("[DBService] Background Cloud save error:", e);
+        }
+      })();
+    }
+
+    // 2. Local Save (Non-blocking background task)
+    (async () => {
+      try {
+        await fetchJSON(`${API_BASE}/agreements`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(agreement)
+        });
+      } catch (error) {
+        console.warn("[DBService] Local save failed (expected on Vercel):", error);
+      }
+    })();
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
-    // 1. Local Update FIRST
-    try {
-      await fetchJSON(`${API_BASE}/agreements/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-    } catch (error) {
-      console.error("[DBService] Local update failed:", error);
-      throw error;
-    }
+    const isCloud = this.isCloudEnabled();
 
-    // 2. Cloud Update (NON-BLOCKING)
-    if (this.isCloudEnabled()) {
-      supabase!.from('agreements').update(updates).eq('id', id).then(({ error }) => {
-        if (error) {
-          console.error("[DBService] Background Cloud update error:", error.message, error.hint || "");
-          console.error("[DBService] Failed ID:", id, "Updates:", updates);
-        }
-      });
-    }
-
-    // Update local fallback
+    // Update local fallback immediately
     const local = localStorage.getItem('kdb_agreements_fallback');
     if (local) {
-      let agreements = JSON.parse(local);
-      const index = agreements.findIndex((a: any) => a.id === id);
-      if (index !== -1) {
-        agreements[index] = { ...agreements[index], ...updates };
-        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
-      }
+      try {
+        let agreements = JSON.parse(local);
+        const index = agreements.findIndex((a: any) => a.id === id);
+        if (index !== -1) {
+          agreements[index] = { ...agreements[index], ...updates };
+          localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+        }
+      } catch (e) {}
     }
+
+    // 1. Cloud Update (Background)
+    if (isCloud) {
+      (async () => {
+        try {
+          const { error } = await supabase!.from('agreements').update(updates).eq('id', id);
+          if (error) console.error("[DBService] Background Cloud update failed:", error.message);
+        } catch (e) {
+          console.error("[DBService] Background Cloud update error:", e);
+        }
+      })();
+    }
+
+    // 2. Local Update (Background)
+    (async () => {
+      try {
+        await fetchJSON(`${API_BASE}/agreements/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+      } catch (error) {
+        console.warn("[DBService] Local update failed:", error);
+      }
+    })();
   },
 
   async deleteAgreement(id: string): Promise<void> {
-    // Local Delete
-    try {
-      await fetchJSON(`${API_BASE}/agreements/${id}`, { method: 'DELETE' });
-    } catch (error) {
-      console.error("[DBService] Local delete failed:", error);
+    const isCloud = this.isCloudEnabled();
+
+    // 1. Cloud Delete First
+    if (isCloud) {
+      try {
+        const { error } = await supabase!.from('agreements').delete().eq('id', id);
+        if (error) throw error;
+      } catch (error) {
+        console.error("[DBService] Cloud delete failed:", error);
+        throw error;
+      }
     }
-    
-    // Cloud Delete (Background)
-    if (supabase) {
-      supabase.from('agreements').delete().eq('id', id).then(({ error }) => {
-        if (error) console.error("[DBService] Cloud delete error:", error);
-      });
+
+    // 2. Local Delete (Background)
+    const localDeletePromise = (async () => {
+      try {
+        await fetchJSON(`${API_BASE}/agreements/${id}`, { method: 'DELETE' });
+      } catch (error) {
+        console.warn("[DBService] Local delete failed (expected on Vercel):", error);
+      }
+    })();
+
+    if (!isCloud) {
+      await localDeletePromise;
     }
 
     const local = localStorage.getItem('kdb_agreements_fallback');
     if (local) {
-      let agreements = JSON.parse(local);
-      agreements = agreements.filter((a: any) => a.id !== id);
-      localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      try {
+        let agreements = JSON.parse(local);
+        agreements = agreements.filter((a: any) => a.id !== id);
+        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+      } catch (e) {}
     }
   },
 
@@ -305,8 +324,19 @@ export const DBService = {
   async getDebtors(): Promise<DebtorRecord[]> {
     const isCloud = this.isCloudEnabled();
 
-    // 1. Start Cloud Fetch in background
-    const cloudFetchPromise = isCloud ? (async () => {
+    // 1. Try Local API first
+    try {
+      const localData = await fetchJSON(`${API_BASE}/debtors?t=${Date.now()}`);
+      if (localData && localData.length > 0) {
+        localStorage.setItem('kdb_debtors_fallback', JSON.stringify(localData));
+        return localData;
+      }
+    } catch (error) {
+      console.warn("[DBService] Local debtors fetch failed:", error);
+    }
+
+    // 2. Try Cloud
+    if (isCloud) {
       try {
         const { data, error } = await supabase!
           .from('debtors')
@@ -315,34 +345,24 @@ export const DBService = {
         
         if (!error && data) {
           localStorage.setItem('kdb_debtors_fallback', JSON.stringify(data));
-          this.syncDebtorsToLocal(data).catch(() => {});
           return data as DebtorRecord[];
         }
-      } catch (error) {}
-      return null;
-    })() : Promise.resolve(null);
-
-    // 2. Try Local API immediately
-    try {
-      const localData = await fetchJSON(`${API_BASE}/debtors?t=${Date.now()}`);
-      if (localData && localData.length > 0) {
-        localStorage.setItem('kdb_debtors_fallback', JSON.stringify(localData));
-        return localData;
+      } catch (error) {
+        console.error("[DBService] Cloud debtors fetch error:", error);
       }
-    } catch (error) {
-      console.error("[DBService] Local debtors fetch error:", error);
     }
 
     // 3. Fallback to localStorage
     const cached = localStorage.getItem('kdb_debtors_fallback');
     if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed.length > 0) return parsed;
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return [];
+      }
     }
 
-    // 4. Wait for cloud only if local is empty
-    const cloudData = await cloudFetchPromise;
-    return cloudData || [];
+    return [];
   },
 
   async saveDebtors(debtors: DebtorRecord[]): Promise<void> {
@@ -365,8 +385,8 @@ export const DBService = {
   async getStaffConfig(): Promise<StaffConfig> {
     const isCloud = this.isCloudEnabled();
     
-    // 1. Start Cloud Fetch in background
-    const cloudFetchPromise = isCloud ? (async () => {
+    // 1. If Cloud is enabled, it's primary
+    if (isCloud) {
       try {
         const { data } = await supabase!.from('staff_config').select('*').single();
         if (data) {
@@ -379,40 +399,65 @@ export const DBService = {
           }).catch(() => {});
           return data as StaffConfig;
         }
-      } catch (error) {}
-      return null;
-    })() : Promise.resolve(null);
+      } catch (error) {
+        console.error("[DBService] Cloud staff fetch error:", error);
+      }
+    }
 
-    // 2. Try Local API immediately
+    // 2. Try Local API
     try {
       const localData = await fetchJSON(`${API_BASE}/staff?t=${Date.now()}`);
       if (localData) {
         localStorage.setItem('kdb_staff_fallback', JSON.stringify(localData));
         return localData;
       }
-    } catch (error) {}
+    } catch (error) {
+      console.warn("[DBService] Local staff fetch failed (expected on Vercel):", error);
+    }
 
     // 3. Fallback to localStorage
     const cached = localStorage.getItem('kdb_staff_fallback');
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return { officialSignature: '' };
+      }
+    }
 
-    // 4. Wait for cloud only if local is empty
-    const cloudData = await cloudFetchPromise;
-    return cloudData || { officialSignature: '' };
+    return { officialSignature: '' };
   },
 
   async saveStaffConfig(config: StaffConfig): Promise<void> {
-    if (supabase) {
-      await supabase.from('staff_config').upsert({ id: 1, ...config });
+    const isCloud = this.isCloudEnabled();
+
+    // 1. Cloud Save First
+    if (isCloud) {
+      try {
+        await supabase!.from('staff_config').upsert({ id: 1, ...config });
+      } catch (error) {
+        console.error("[DBService] Cloud staff save failed:", error);
+        throw error;
+      }
     }
-    try {
-      await fetchJSON(`${API_BASE}/staff`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
-    } catch (error) {
-      console.error("[DBService] Local staff save failed:", error);
+
+    // 2. Local Save (Background)
+    const localSavePromise = (async () => {
+      try {
+        await fetchJSON(`${API_BASE}/staff`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+      } catch (error) {
+        console.warn("[DBService] Local staff save failed (expected on Vercel):", error);
+      }
+    })();
+
+    if (!isCloud) {
+      await localSavePromise;
     }
+
+    localStorage.setItem('kdb_staff_fallback', JSON.stringify(config));
   }
 };

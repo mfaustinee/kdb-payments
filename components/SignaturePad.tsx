@@ -1,5 +1,5 @@
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 interface SignaturePadProps {
   onSave: (signature: string) => void;
@@ -8,58 +8,107 @@ interface SignaturePadProps {
 
 export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isDrawing = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const [isEmpty, setIsEmpty] = useState(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { desynchronized: true });
     if (!ctx) return;
 
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1e293b';
+    // Handle High DPI screens
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      
+      // Reset context styles after resize
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#0f172a'; // Slate-900
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
 
     const getPos = (e: MouseEvent | TouchEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      let clientX, clientY;
+      
+      if ('touches' in e) {
+        // Use changedTouches for end events, touches for start/move
+        const touch = e.touches[0] || (e as TouchEvent).changedTouches[0];
+        clientX = touch.clientX;
+        clientY = touch.clientY;
+      } else {
+        clientX = (e as MouseEvent).clientX;
+        clientY = (e as MouseEvent).clientY;
+      }
+
+      // Calculate position relative to the canvas element
+      // Since we used ctx.scale(dpr, dpr), the internal coordinate system
+      // matches the CSS pixel system. So (clientX - rect.left) is exactly
+      // the coordinate we need to pass to ctx methods.
       return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
+        x: (clientX - rect.left),
+        y: (clientY - rect.top)
       };
     };
 
     const start = (e: MouseEvent | TouchEvent) => {
       isDrawing.current = true;
       const pos = getPos(e);
+      lastPos.current = pos;
       ctx.beginPath();
       ctx.moveTo(pos.x, pos.y);
+      setIsEmpty(false);
     };
 
     const draw = (e: MouseEvent | TouchEvent) => {
       if (!isDrawing.current) return;
-      e.preventDefault();
+      
+      // Prevent scrolling while signing
+      if (e.cancelable) e.preventDefault();
+      
       const pos = getPos(e);
+      
+      // Standard smooth drawing logic
+      ctx.beginPath();
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#0f172a';
+      
+      ctx.moveTo(lastPos.current.x, lastPos.current.y);
       ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
+      
+      lastPos.current = pos;
     };
 
     const stop = () => {
       if (isDrawing.current) {
         isDrawing.current = false;
-        onSave(canvas.toDataURL());
+        onSave(canvas.toDataURL('image/png'));
       }
     };
 
     canvas.addEventListener('mousedown', start);
     canvas.addEventListener('mousemove', draw);
     window.addEventListener('mouseup', stop);
-    canvas.addEventListener('touchstart', start);
-    canvas.addEventListener('touchmove', draw);
+    
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
     canvas.addEventListener('touchend', stop);
 
     return () => {
+      window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousedown', start);
       canvas.removeEventListener('mousemove', draw);
       window.removeEventListener('mouseup', stop);
@@ -74,28 +123,54 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
+    // Clear with the scaled dimensions
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Re-apply scale
+    const dpr = window.devicePixelRatio || 1;
+    ctx.scale(dpr, dpr);
+    
+    // Reset styles
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f172a';
+    
+    setIsEmpty(true);
     onSave('');
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center">
-        <label className="text-sm font-medium text-slate-700">{label}</label>
-        <button 
-          type="button" 
-          onClick={clear}
-          className="text-xs text-rose-600 hover:underline font-medium"
-        >
-          Clear
-        </button>
+    <div className="space-y-2" ref={containerRef}>
+      <div className="flex justify-between items-end">
+        <div>
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</label>
+          <p className="text-[10px] text-slate-400">Sign inside the box below</p>
+        </div>
+        {!isEmpty && (
+          <button 
+            type="button" 
+            onClick={clear}
+            className="text-xs text-rose-500 hover:text-rose-600 font-bold uppercase tracking-tight"
+          >
+            Clear
+          </button>
+        )}
       </div>
-      <canvas 
-        ref={canvasRef} 
-        width={400} 
-        height={150} 
-        className="signature-canvas w-full touch-none"
-      />
+      <div className="relative group">
+        <canvas 
+          ref={canvasRef} 
+          className="signature-canvas w-full h-32 bg-slate-50 border-2 border-slate-200 rounded-xl cursor-crosshair touch-none transition-colors group-hover:border-slate-300"
+          style={{ touchAction: 'none' }}
+        />
+        {isEmpty && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+            <span className="text-slate-400 text-sm font-medium italic">Sign here</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
