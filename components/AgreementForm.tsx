@@ -233,7 +233,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                       <tr key={i} className="bg-white hover:bg-slate-50/50 transition-colors">
                         <td className="px-8 py-5 font-bold text-slate-400">Inst. {inst.no} ({inst.period})</td>
                         <td className="px-8 py-5 font-black text-emerald-600 text-lg">KES {inst.amount.toLocaleString()}</td>
-                        <td className="px-8 py-5"><input required type="date" value={inst.dueDate || ''} onChange={e => updateInstallment(i, e.target.value)} className="w-full px-4 py-3 border-2 border-emerald-600/20 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-bold" /></td>
+                        <td className="px-8 py-5"><input required type="date" value={inst.dueDate || ''} onChange={e => updateInstallment(i, e.target.value)} className="w-full px-4 py-3 border-2 border-emerald-600 rounded-xl outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all font-bold text-slate-800" /></td>
                       </tr>
                     ))}
                   </tbody>
