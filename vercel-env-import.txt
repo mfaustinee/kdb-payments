@@ -1,0 +1,13 @@
+# Vercel Environment Variables Import File
+# Copy these into your Vercel Project Settings > Environment Variables
+# Or save as .env and use 'vc env import .env'
+
+GEMINI_API_KEY=
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+VITE_EMAILJS_SERVICE_ID=service_llhl7pf
+VITE_EMAILJS_TEMPLATE_ADMIN=template_submission_aler
+VITE_EMAILJS_TEMPLATE_CLIENT=template_approval_notice
+VITE_EMAILJS_PUBLIC_KEY=
+VITE_EMAILJS_ACCESS_TOKEN=
+VITE_KDB_ADMIN_EMAIL=kigunda.faustine@kdb.co.ke

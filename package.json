@@ -4,15 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx api/index.ts",
+    "dev": "tsx server.ts",
     "build": "vite build",
-    "start": "tsx api/index.ts",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
-    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dompurify": "^3.3.1",
     "express": "^5.2.1",
@@ -26,11 +24,8 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.0",
-    "@types/compression": "^1.8.1",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^22.14.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",
     "tailwindcss": "^4.2.0",
     "typescript": "~5.8.2",

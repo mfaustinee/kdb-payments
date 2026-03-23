@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { AgreementForm } from './components/AgreementForm';
-import { AdminDashboard } from './components/AdminDashboard';
-import { SuccessScreen } from './components/SuccessScreen';
-import { AgreementData, DebtorRecord, ArrearItem, StaffConfig } from './types';
+import { AgreementForm } from './components/AgreementForm.tsx';
+import { AdminDashboard } from './components/AdminDashboard.tsx';
+import { SuccessScreen } from './components/SuccessScreen.tsx';
+import { AgreementData, DebtorRecord, ArrearItem, StaffConfig } from './types.ts';
 import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2, LogOut, Lock } from 'lucide-react';
-import { DBService } from './services/db';
+import { DBService } from './services/db.ts';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -24,25 +24,7 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState(false);
 
   useEffect(() => {
-    console.log("[App] Version 1.0.6 - Initializing...");
     loadDatabase();
-
-    // Smart Polling for multi-device sync (every 60 seconds)
-    // Only polls when the tab is visible to save resources
-    const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        console.log("[App] Background sync: Checking for updates...");
-        loadDatabase();
-      }
-    }, 60000);
-
-    // Also sync when the user returns to the tab
-    window.addEventListener('focus', loadDatabase);
-
-    return () => {
-      clearInterval(pollInterval);
-      window.removeEventListener('focus', loadDatabase);
-    };
   }, []);
 
   const handleAdminAccess = () => {
@@ -68,25 +50,6 @@ const App: React.FC = () => {
   };
 
   const loadDatabase = async () => {
-    // 1. Load from cache immediately for zero-latency UI
-    const cachedAgreements = localStorage.getItem('kdb_agreements_fallback');
-    const cachedDebtors = localStorage.getItem('kdb_debtors_fallback');
-    const cachedStaff = localStorage.getItem('kdb_staff_fallback');
-    
-    if (cachedAgreements || cachedDebtors || cachedStaff) {
-      try {
-        if (cachedAgreements) {
-          const parsed = JSON.parse(cachedAgreements);
-          setAgreements(parsed);
-          setUnreadCount(parsed.filter((a: any) => a.status === 'submitted' || a.status === 'resubmission_requested').length);
-        }
-        if (cachedDebtors) setDebtors(JSON.parse(cachedDebtors));
-        if (cachedStaff) setStaffConfig(JSON.parse(cachedStaff));
-      } catch (e) {
-        console.error("[App] Cache parse error:", e);
-      }
-    }
-
     setIsSyncing(true);
     try {
       const [storedAgreements, storedDebtors, storedStaff] = await Promise.all([
@@ -98,15 +61,6 @@ const App: React.FC = () => {
       const uniqueAgreements = Array.from(new Map(storedAgreements.map(a => [a.id, a])).values());
       setAgreements(uniqueAgreements);
       
-      // Update cache
-      try {
-        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(uniqueAgreements));
-        localStorage.setItem('kdb_debtors_fallback', JSON.stringify(storedDebtors));
-        localStorage.setItem('kdb_staff_fallback', JSON.stringify(storedStaff));
-      } catch (e) {
-        console.warn("[App] LocalStorage quota exceeded during sync.");
-      }
-
       // Check for direct link ID
       const urlParams = new URLSearchParams(window.location.search);
       const id = urlParams.get('id');
@@ -120,8 +74,30 @@ const App: React.FC = () => {
       setUnreadCount(uniqueAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
       setStaffConfig(storedStaff);
 
-      const uniqueDebtors = Array.from(new Map(storedDebtors.map(d => [d.id, d])).values());
-      setDebtors(uniqueDebtors);
+      if (storedDebtors.length > 0) {
+        const uniqueDebtors = Array.from(new Map(storedDebtors.map(d => [d.id, d])).values());
+        setDebtors(uniqueDebtors);
+      } else {
+        const initialDebtors: DebtorRecord[] = [
+          {
+            id: 'D001',
+            dboName: 'Sunrise Dairy Ltd',
+            premiseName: 'Sunrise Main Depot',
+            permitNo: 'KDB/MB/0001/0001234/2024',
+            location: 'Thika Road, Ruiru',
+            county: 'Kiambu',
+            arrearsBreakdown: [{ id: '1', month: 'January 2024', amount: 150000 }],
+            totalArrears: 150000,
+            totalArrearsWords: 'One Hundred and Fifty Thousand Shillings',
+            arrearsPeriod: 'Jan 2024',
+            debitNoteNo: 'DN/2024/552',
+            tel: '0712345678',
+            installments: [{ no: 1, period: 'Jan 2024', dueDate: '', amount: 150000 }]
+          }
+        ];
+        setDebtors(initialDebtors);
+        await DBService.saveDebtors(initialDebtors);
+      }
     } catch (error) {
       console.error("[App] Failed to load database:", error);
     } finally {
@@ -135,7 +111,7 @@ const App: React.FC = () => {
     try {
       const submission = { ...data, submittedAt: new Date().toISOString() };
       
-      // 1. Save locally (Blocking)
+      // Check if it's an update (resubmission request)
       const existing = agreements.find(a => a.id === data.id);
       if (existing) {
         await DBService.updateAgreement(data.id, submission);
@@ -143,39 +119,15 @@ const App: React.FC = () => {
         await DBService.saveAgreement(submission);
       }
       
-      // 2. Update local state immediately (Optimistic)
-      setAgreements(prev => {
-        const index = prev.findIndex(a => a.id === data.id);
-        if (index !== -1) {
-          const updated = [...prev];
-          updated[index] = submission;
-          return updated;
-        }
-        return [submission, ...prev];
-      });
+      const updated = await DBService.getAgreements();
+      setAgreements(updated);
+      setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
       
-      setUnreadCount(prev => {
-        const isNew = !existing;
-        if (isNew) return prev + 1;
-        return prev;
-      });
-      
-      setCurrentAgreement(submission);
-      
-      // 3. Navigate immediately
+      setCurrentAgreement(data);
       navigate('/success');
-      
-      // 4. Trigger background sync (Non-blocking)
-      DBService.getAgreements().then(updated => {
-        setAgreements(updated);
-        setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
-      }).catch(e => console.error("[App] Background sync failed:", e));
-
-    } catch (error: any) {
+    } catch (error) {
       console.error("Submission failed:", error);
-      const msg = error.message || String(error);
-      alert(`SUBMISSION ERROR:\n\n${msg}\n\nTechnical Details: Check the browser console (F12) for more information.`);
-      throw error; // Re-throw so AgreementForm can reset its state
+      alert("Submission failed. Please check your connection and try again.");
     } finally {
       setIsSyncing(false);
     }
@@ -183,37 +135,17 @@ const App: React.FC = () => {
 
   const handleAdminAction = async (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => {
     setIsSyncing(true);
-    try {
-      const updates: Partial<AgreementData> = action === 'approve' 
-        ? { status: 'approved', officialSignature: adminData?.signature, officialName: adminData?.name, approvedAt: new Date().toISOString() }
-        : { status: 'rejected', rejectionReason: adminData?.reason };
+    const updates: Partial<AgreementData> = action === 'approve' 
+      ? { status: 'approved', officialSignature: adminData?.signature, officialName: adminData?.name, approvedAt: new Date().toISOString() }
+      : { status: 'rejected', rejectionReason: adminData?.reason };
 
-      // 1. Update locally
-      await DBService.updateAgreement(id, updates);
-      
-      // 2. Update local state immediately
-      setAgreements(prev => {
-        const index = prev.findIndex(a => a.id === id);
-        if (index !== -1) {
-          const updated = [...prev];
-          updated[index] = { ...updated[index], ...updates };
-          return updated;
-        }
-        return prev;
-      });
-      
-      // 3. Trigger background sync
-      DBService.getAgreements().then(updated => {
-        setAgreements(updated);
-        setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
-      }).catch(e => console.error("[App] Admin background sync failed:", e));
-
-    } catch (error) {
-      console.error("[App] Admin action failed:", error);
-      alert("Action failed. Please try again.");
-    } finally {
-      setIsSyncing(false);
-    }
+    await DBService.updateAgreement(id, updates);
+    
+    const updated = await DBService.getAgreements();
+    
+    setAgreements(updated);
+    setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+    setIsSyncing(false);
   };
 
   const handleDeleteAgreement = async (id: string) => {
@@ -233,7 +165,6 @@ const App: React.FC = () => {
   };
 
   const handleDebtorUpdate = async (updated: DebtorRecord[]) => {
-    console.log(`[App] Updating debtors: ${updated.length} entries`);
     setDebtors(updated);
     await DBService.saveDebtors(updated);
   };
@@ -255,14 +186,14 @@ const App: React.FC = () => {
               <div className="hidden sm:block">
                 <div className="flex items-center space-x-2">
                   <span className="font-black text-xs uppercase tracking-widest text-slate-800">KDB Payments</span>
-                  <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full border ${isSyncing ? 'bg-amber-50 border-amber-100' : (DBService.isCloudEnabled() ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200')}`}>
+                  <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full border ${isSyncing ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'}`}>
                     {isSyncing ? (
                       <Loader2 className="w-2.5 h-2.5 text-amber-500 animate-spin" />
                     ) : (
-                      <span className={`w-1.5 h-1.5 rounded-full ${DBService.isCloudEnabled() ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
                     )}
-                    <span className={`text-[9px] font-black uppercase tracking-tight ${isSyncing ? 'text-amber-600' : (DBService.isCloudEnabled() ? 'text-emerald-600' : 'text-slate-500')}`}>
-                      {isSyncing ? 'Syncing...' : (DBService.isCloudEnabled() ? 'Cloud Active' : 'Local Only')}
+                    <span className={`text-[9px] font-black uppercase tracking-tight ${isSyncing ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {isSyncing ? 'Syncing...' : 'Connected'}
                     </span>
                   </div>
                 </div>
@@ -374,12 +305,7 @@ const App: React.FC = () => {
         </Routes>
       </main>
       
-      <footer className="py-8 border-t bg-white text-center">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col items-center space-y-4">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-            © 2026 Kenya Dairy Board
-          </p>
-        </div>
+      <footer className="py-6 border-t bg-white text-center">
       </footer>
     </div>
   );
