@@ -7,7 +7,7 @@ import { Building2, Calendar, CreditCard, ChevronRight, CheckCircle2, ShieldChec
 interface AgreementFormProps {
   agreements: AgreementData[];
   debtors: DebtorRecord[];
-  onSubmit: (data: AgreementData) => void;
+  onSubmit: (data: AgreementData) => Promise<void>;
 }
 
 export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtors, onSubmit }) => {
@@ -91,7 +91,12 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       await new Promise(r => setTimeout(r, 800));
     }
     
-    onSubmit(formData as AgreementData);
+    try {
+      await onSubmit(formData as AgreementData);
+    } catch (error) {
+      console.error("Submission error in form:", error);
+      setIsSubmitting(false);
+    }
   };
 
   const isStep1Valid = formData.clientEmail && formData.tel && formData.location;
@@ -121,7 +126,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-6 py-16 md:py-32">
       {isSubmitting && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[200] flex items-center justify-center p-8">
           <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in-95">
@@ -143,12 +148,12 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       )}
 
       <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
-        <div className="bg-emerald-600 px-10 py-8 text-white flex justify-between items-center">
-          <div><h2 className="text-2xl font-black">Execution Portal</h2><p className="text-emerald-100 text-xs font-bold uppercase tracking-widest mt-1 opacity-80">Levy Arrears Payment Agreement</p></div>
+        <div className="bg-emerald-600 px-10 py-10 text-white flex justify-between items-center">
+          <div><h2 className="text-3xl font-black tracking-tight">Execution Portal</h2><p className="text-emerald-100 text-xs font-bold uppercase tracking-widest mt-1 opacity-80">Levy Arrears Payment Agreement</p></div>
           <div className="bg-white/10 px-4 py-2 rounded-2xl text-[10px] font-black tracking-widest uppercase flex items-center"><Lock className="w-3 h-3 mr-2" /> Secured Session</div>
         </div>
 
-        <div className="p-10">
+        <div className="p-12">
           {step === 0 && (
             <div className="max-w-md mx-auto py-12 space-y-10">
               <div className="text-center"><ShieldCheck className="w-20 h-20 text-emerald-600 mx-auto mb-6" /><h3 className="text-2xl font-black text-slate-800">Operator Identity</h3><p className="text-sm text-slate-500 font-medium leading-relaxed">Authenticate your Business Profile using your KDB Permit Number and registered phone number</p></div>
@@ -228,7 +233,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                       <tr key={i} className="bg-white hover:bg-slate-50/50 transition-colors">
                         <td className="px-8 py-5 font-bold text-slate-400">Inst. {inst.no} ({inst.period})</td>
                         <td className="px-8 py-5 font-black text-emerald-600 text-lg">KES {inst.amount.toLocaleString()}</td>
-                        <td className="px-8 py-5"><input required type="date" value={inst.dueDate || ''} onChange={e => updateInstallment(i, e.target.value)} className="w-full px-4 py-3 border-2 border-slate-50 rounded-xl outline-none focus:border-emerald-500 transition-all font-bold" /></td>
+                        <td className="px-8 py-5"><input required type="date" value={inst.dueDate || ''} onChange={e => updateInstallment(i, e.target.value)} className="w-full px-4 py-3 border-2 border-emerald-600/20 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-bold" /></td>
                       </tr>
                     ))}
                   </tbody>

@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Data storage
+data/
+*.ts.test
+test_*.ts
+get_size.ts
+check_json.ts
+vercel-env-import.txt

@@ -123,11 +123,12 @@ const App: React.FC = () => {
       setAgreements(updated);
       setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
       
-      setCurrentAgreement(data);
+      setCurrentAgreement(submission);
       navigate('/success');
     } catch (error) {
       console.error("Submission failed:", error);
       alert("Submission failed. Please check your connection and try again.");
+      throw error;
     } finally {
       setIsSyncing(false);
     }

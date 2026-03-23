@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types.ts';
-import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash } from 'lucide-react';
-import { PDFPreview } from './PDFPreview.tsx';
-import { downloadAgreementPDF } from '../services/pdf.ts';
-import { numberToWords } from '../utils/numberToWords.ts';
+import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types';
+import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity } from 'lucide-react';
+import { PDFPreview } from './PDFPreview';
+import { downloadAgreementPDF } from '../services/pdf';
+import { numberToWords } from '../utils/numberToWords';
 
 interface AdminDashboardProps {
   agreements: AgreementData[];
@@ -32,6 +32,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingDebtor, setIsAddingDebtor] = useState(false);
   const [editingDebtorId, setEditingDebtorId] = useState<string | null>(null);
+  const [serverLogs, setServerLogs] = useState<string>('');
+  const [systemHealth, setSystemHealth] = useState<any>(null);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+
+  const fetchLogs = async () => {
+    try {
+      const response = await fetch('/api/logs?t=' + Date.now());
+      const text = await response.text();
+      setServerLogs(text);
+    } catch (e) {
+      setServerLogs('Failed to fetch logs');
+    }
+  };
+
+  const checkHealth = async () => {
+    setIsTestingConnection(true);
+    try {
+      const response = await fetch('/api/health?t=' + Date.now());
+      const data = await response.json();
+      setSystemHealth(data);
+    } catch (e: any) {
+      setSystemHealth({ status: 'error', message: e.message });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'settings') {
+      fetchLogs();
+      checkHealth();
+    }
+  }, [tab]);
+
   const [newDebtor, setNewDebtor] = useState<Partial<DebtorRecord>>({
     dboName: '',
     premiseName: '',
@@ -152,6 +186,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         await onDebtorUpdate([...debtors, debtor]);
       }
 
+    } catch (error: any) {
+      console.error("Error in handleAddDebtor:", error);
+      alert("Failed to save entry: " + error.message);
+    } finally {
+      setIsSavingDebtor(false);
       setIsAddingDebtor(false);
       setEditingDebtorId(null);
       setNewDebtor({
@@ -166,10 +205,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         arrearsBreakdown: [],
         installments: [{ no: 1, period: '', dueDate: '', amount: 0 }]
       });
-    } catch (error) {
-      console.error("Error in handleAddDebtor:", error);
-    } finally {
-      setIsSavingDebtor(false);
     }
   };
 
@@ -182,6 +217,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const handleDownloadPDF = async () => {
     if (!selectedReview) return;
     await downloadAgreementPDF(selectedReview, 'formal-agreement-hidden');
+  };
+
+  const envCheck = {
+    supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+    supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
   };
 
   return (
@@ -303,16 +343,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         <div>
           <div className="flex items-center space-x-3">
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">KDB Admin Workspace</h2>
-            {onRefresh && (
+            <div className="flex items-center space-x-2">
+              {onRefresh && (
+                <button 
+                  onClick={onRefresh}
+                  disabled={isSyncing}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-emerald-600 group"
+                  title="Refresh Data"
+                >
+                  <Loader2 className={`w-5 h-5 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+                </button>
+              )}
               <button 
-                onClick={onRefresh}
+                onClick={async () => {
+                  try {
+                    const { DBService } = await import('../services/db.ts');
+                    await DBService.forceSync();
+                    alert("Cloud & Local databases are now perfectly synchronized.");
+                    onRefresh?.();
+                  } catch (e: any) {
+                    alert("Sync failed: " + e.message);
+                  }
+                }}
                 disabled={isSyncing}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-emerald-600 group"
-                title="Refresh Data"
+                className="flex items-center space-x-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                title="Force Cloud Sync"
               >
-                <Loader2 className={`w-5 h-5 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+                <Database className="w-3 h-3" />
+                <span>Sync All</span>
               </button>
-            )}
+            </div>
           </div>
           <p className="text-slate-500 font-medium mt-1">Operational control for Kericho & Region levy compliance.</p>
         </div>
@@ -593,6 +653,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
             </div>
             
             <div className="space-y-6">
+                <div className={`p-6 rounded-[32px] border flex flex-col space-y-4 transition-all ${envCheck.supabaseUrl && envCheck.supabaseKey ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <Activity className={`w-5 h-5 ${envCheck.supabaseUrl ? 'text-emerald-500' : 'text-rose-500'}`} />
+                            <div>
+                              <span className={`text-xs font-bold block ${envCheck.supabaseUrl ? 'text-emerald-700' : 'text-rose-700'}`}>Cloud Persistence</span>
+                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Supabase Integration Status</span>
+                            </div>
+                        </div>
+                        {envCheck.supabaseUrl && envCheck.supabaseKey ? (
+                            <div className="flex items-center space-x-3">
+                              <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CONNECTED</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center space-x-2">
+                              <AlertCircle className="w-4 h-4 text-rose-500" />
+                              <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">OFFLINE MODE</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {(!envCheck.supabaseUrl || !envCheck.supabaseKey) && (
+                      <div className="p-4 bg-white/50 rounded-2xl border border-rose-200 space-y-2">
+                        <p className="text-[10px] font-bold text-rose-700 uppercase tracking-tight">Missing Configuration:</p>
+                        <ul className="text-[9px] text-rose-600 space-y-1 list-disc ml-4 font-medium">
+                          {!envCheck.supabaseUrl && <li>VITE_SUPABASE_URL is not set in environment</li>}
+                          {!envCheck.supabaseKey && <li>VITE_SUPABASE_ANON_KEY is not set in environment</li>}
+                        </ul>
+                        <p className="text-[9px] text-slate-500 italic mt-2">Add these to your project settings to enable Cloud Sync.</p>
+                      </div>
+                    )}
+
+                    {envCheck.supabaseUrl && envCheck.supabaseKey && (
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <button 
+                          onClick={async () => {
+                            try {
+                              const { DBService } = await import('../services/db.ts');
+                              await DBService.forceSync();
+                              alert("PULL COMPLETE: Local data has been updated with the latest Cloud records.");
+                              onRefresh?.();
+                            } catch (e: any) {
+                              alert("Pull failed: " + e.message);
+                            }
+                          }}
+                          className="w-full sm:w-auto text-[10px] font-black text-emerald-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-50 border border-emerald-100 transition-all active:scale-95 flex items-center justify-center"
+                        >
+                          <Download className="w-3 h-3 mr-2" /> PULL FROM CLOUD
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            if (!window.confirm("This will push all local records to the Cloud. Existing records with the same ID will be updated. Proceed?")) return;
+                            try {
+                              const { DBService } = await import('../services/db.ts');
+                              await DBService.syncLocalToCloud();
+                              alert("PUSH COMPLETE: Cloud database has been updated with local records.");
+                              onRefresh?.();
+                            } catch (e: any) {
+                              alert("Push failed: " + e.message);
+                            }
+                          }}
+                          className="w-full sm:w-auto text-[10px] font-black text-blue-600 bg-white px-4 py-2 rounded-xl shadow-sm hover:bg-blue-50 border border-blue-100 transition-all active:scale-95 flex items-center justify-center"
+                        >
+                          <Upload className="w-3 h-3 mr-2" /> PUSH TO CLOUD
+                        </button>
+                      </div>
+                    )}
+                </div>
+
                 <div className="flex flex-col sm:flex-row items-center gap-8 bg-slate-50 p-8 rounded-[32px] border border-slate-100">
                     <div className="w-40 h-28 bg-white rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden shadow-inner group relative">
                         {staffConfig.officialSignature ? (
@@ -614,6 +743,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                             {staffConfig.officialSignature ? 'Change Image' : 'Add Signature'}
                         </label>
                     </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+                      <Server className="w-3 h-3 mr-2" /> System Diagnostics
+                    </h4>
+                    <button onClick={checkHealth} className="text-[9px] font-black text-emerald-600 uppercase tracking-widest hover:underline">
+                      Refresh Status
+                    </button>
+                  </div>
+                  <div className="bg-slate-900 rounded-[32px] p-6 text-white space-y-4 shadow-xl">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest block">API Status</span>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${systemHealth?.status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                          <span className="text-xs font-bold">{systemHealth?.status === 'ok' ? 'Operational' : 'Error'}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest block">Local Storage</span>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${systemHealth?.writable ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                          <span className="text-xs font-bold">{systemHealth?.writable ? 'Writable' : 'Read-Only'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {systemHealth?.time && (
+                      <div className="text-[9px] text-slate-500 font-medium">Server Time: {new Date(systemHealth.time).toLocaleString()}</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+                      <Activity className="w-3 h-3 mr-2" /> Server Logs
+                    </h4>
+                    <button onClick={fetchLogs} className="text-[9px] font-black text-emerald-600 uppercase tracking-widest hover:underline">
+                      Refresh Logs
+                    </button>
+                  </div>
+                  <div className="bg-slate-50 rounded-[32px] border border-slate-200 p-6 shadow-inner">
+                    <pre className="text-[10px] font-mono text-slate-600 overflow-y-auto max-h-40 whitespace-pre-wrap leading-relaxed">
+                      {serverLogs || 'No logs available.'}
+                    </pre>
+                  </div>
                 </div>
             </div>
           </div>
