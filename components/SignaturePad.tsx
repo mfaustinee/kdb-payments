@@ -95,7 +95,9 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
     const stop = () => {
       if (isDrawing.current) {
         isDrawing.current = false;
-        onSave(canvas.toDataURL('image/png'));
+        // Use JPEG with 0.5 quality to prevent "413 Request Entity Too Large" errors
+        // and avoid filling up localStorage quota.
+        onSave(canvas.toDataURL('image/jpeg', 0.5));
       }
     };
 

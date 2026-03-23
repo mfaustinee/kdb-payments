@@ -99,9 +99,13 @@ const App: React.FC = () => {
       setAgreements(uniqueAgreements);
       
       // Update cache
-      localStorage.setItem('kdb_agreements_fallback', JSON.stringify(uniqueAgreements));
-      localStorage.setItem('kdb_debtors_fallback', JSON.stringify(storedDebtors));
-      localStorage.setItem('kdb_staff_fallback', JSON.stringify(storedStaff));
+      try {
+        localStorage.setItem('kdb_agreements_fallback', JSON.stringify(uniqueAgreements));
+        localStorage.setItem('kdb_debtors_fallback', JSON.stringify(storedDebtors));
+        localStorage.setItem('kdb_staff_fallback', JSON.stringify(storedStaff));
+      } catch (e) {
+        console.warn("[App] LocalStorage quota exceeded during sync.");
+      }
 
       // Check for direct link ID
       const urlParams = new URLSearchParams(window.location.search);

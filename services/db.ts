@@ -116,12 +116,16 @@ export const DBService = {
     const isCloud = this.isCloudEnabled();
     
     // Update local fallback cache immediately (Optimistic)
-    const local = localStorage.getItem('kdb_agreements_fallback');
-    let agreements = local ? JSON.parse(local) : [];
-    const index = agreements.findIndex((a: any) => a.id === agreement.id);
-    if (index !== -1) agreements[index] = agreement;
-    else agreements.push(agreement);
-    localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+    try {
+      const local = localStorage.getItem('kdb_agreements_fallback');
+      let agreements = local ? JSON.parse(local) : [];
+      const index = agreements.findIndex((a: any) => a.id === agreement.id);
+      if (index !== -1) agreements[index] = agreement;
+      else agreements.push(agreement);
+      localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
+    } catch (e) {
+      console.warn("[DBService] LocalStorage quota exceeded, skipping fallback save.");
+    }
 
     // 1. Cloud Save (Non-blocking background task)
     if (isCloud) {
@@ -154,16 +158,18 @@ export const DBService = {
     const isCloud = this.isCloudEnabled();
 
     // Update local fallback immediately
-    const local = localStorage.getItem('kdb_agreements_fallback');
-    if (local) {
-      try {
+    try {
+      const local = localStorage.getItem('kdb_agreements_fallback');
+      if (local) {
         let agreements = JSON.parse(local);
         const index = agreements.findIndex((a: any) => a.id === id);
         if (index !== -1) {
           agreements[index] = { ...agreements[index], ...updates };
           localStorage.setItem('kdb_agreements_fallback', JSON.stringify(agreements));
         }
-      } catch (e) {}
+      }
+    } catch (e) {
+      console.warn("[DBService] LocalStorage update failed:", e);
     }
 
     // 1. Cloud Update (Background)

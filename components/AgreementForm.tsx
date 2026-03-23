@@ -255,7 +255,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                             type="date" 
                             value={inst.dueDate || ''} 
                             onChange={e => updateInstallment(i, e.target.value)} 
-                            className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl outline-none focus:border-emerald-500 transition-all font-bold bg-white text-slate-900" 
+                            className="w-full px-4 py-3 border-2 border-slate-400 rounded-xl outline-none focus:border-emerald-500 transition-all font-bold bg-white text-slate-900 shadow-sm" 
                           />
                         </td>
                       </tr>
