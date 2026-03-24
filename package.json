@@ -7,8 +7,9 @@
     "dev": "tsx api/index.ts",
     "build": "vite build",
     "start": "tsx api/index.ts",
-    "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "preview": "npm run build && wrangler dev",
+    "lint": "tsc --noEmit",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -25,6 +26,7 @@
     "tsx": "^4.21.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.30.0",
     "@tailwindcss/vite": "^4.2.0",
     "@types/compression": "^1.8.1",
     "@types/dompurify": "^3.0.5",
@@ -34,6 +36,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "tailwindcss": "^4.2.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "wrangler": "^4.76.0"
   }
 }
