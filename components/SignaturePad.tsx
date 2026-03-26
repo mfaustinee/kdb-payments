@@ -4,9 +4,10 @@ import React, { useRef, useEffect, useState } from 'react';
 interface SignaturePadProps {
   onSave: (signature: string) => void;
   label: string;
+  value?: string;
 }
 
-export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => {
+export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDrawing = useRef(false);
@@ -131,6 +132,30 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
       canvas.removeEventListener('touchend', stop);
     };
   }, []);
+
+  // Auto-restore logic: if we have a value but the canvas is empty, draw it
+  useEffect(() => {
+    if (value && isEmpty && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.onload = () => {
+        // Clear first to be safe
+        const dpr = window.devicePixelRatio || 1;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(dpr, dpr);
+        
+        // Draw the image. We assume the image was saved at the same aspect ratio
+        // or we just fit it to the current canvas size.
+        ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
+        setIsEmpty(false);
+      };
+      img.src = value;
+    }
+  }, [value, isEmpty]);
 
   const clear = () => {
     const canvas = canvasRef.current;

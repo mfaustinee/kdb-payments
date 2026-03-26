@@ -315,7 +315,11 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                 </div>
 
                 {signatureMethod === 'draw' ? (
-                    <SignaturePad label="Authorized Digital Signature *" onSave={handleSignatureSave} />
+                    <SignaturePad 
+                        label="Authorized Digital Signature *" 
+                        onSave={handleSignatureSave} 
+                        value={formData.clientSignature}
+                    />
                 ) : (
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Signature Photo / Camera Capture *</label>
