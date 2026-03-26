@@ -2,17 +2,20 @@ import { AgreementData, DebtorRecord, StaffConfig } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client if environment variables are present
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY || '';
 
 let supabase: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseKey) {
   try {
     supabase = createClient(supabaseUrl, supabaseKey);
+    console.log("[DBService] Supabase initialized successfully");
   } catch (e) {
     console.error("[DBService] Supabase init error:", e);
   }
+} else {
+  console.warn("[DBService] Supabase credentials missing. URL:", !!supabaseUrl, "Key:", !!supabaseKey);
 }
 
 export const DBService = {

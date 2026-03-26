@@ -50,7 +50,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         status: healthData.status || 'ok', 
         writable: healthData.writable, 
         backendSupabase: healthData.supabaseConfigured,
-        clientSupabase: !!import.meta.env.VITE_SUPABASE_URL,
+        clientSupabase: !!(import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL),
         count: agreements.length 
       });
     } catch (e: any) {
@@ -220,8 +220,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   };
 
   const envCheck = {
-    supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-    supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
+    supabaseUrl: !!(import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL),
+    supabaseKey: !!(import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY)
   };
 
   return (

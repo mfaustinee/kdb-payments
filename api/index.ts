@@ -4,6 +4,10 @@ import compression from "compression";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 console.log("[Server] Entry point reached.");
 
@@ -91,7 +95,11 @@ async function startServer() {
       dataDirExists: fs.existsSync(DATA_DIR),
       writable: writable,
       env: process.env.NODE_ENV,
-      supabaseConfigured: !!(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY)
+      supabaseConfigured: !!(
+        process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+      ) && !!(
+        process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+      )
     });
   });
 
