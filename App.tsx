@@ -125,9 +125,10 @@ const App: React.FC = () => {
       
       setCurrentAgreement(submission);
       navigate('/success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Submission failed:", error);
-      alert("Submission failed. Please check your connection and try again.");
+      const errorMessage = error?.message || "Unknown error";
+      alert(`Submission failed: ${errorMessage}\n\nPlease ensure your Supabase URL and Key are correct in your .env file and that the 'agreements' table exists.`);
       throw error;
     } finally {
       setIsSyncing(false);

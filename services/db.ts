@@ -42,19 +42,27 @@ export const DBService = {
   },
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
-    if (!supabase) throw new Error("Supabase not initialized");
+    if (!supabase) {
+      const missing = [];
+      if (!import.meta.env.VITE_SUPABASE_URL) missing.push("VITE_SUPABASE_URL");
+      if (!import.meta.env.VITE_SUPABASE_ANON_KEY) missing.push("VITE_SUPABASE_ANON_KEY");
+      throw new Error(`Supabase not initialized. Missing: ${missing.join(", ")}`);
+    }
 
     try {
       const { error } = await supabase
         .from('agreements')
         .upsert(agreement);
       
-      if (error) throw error;
+      if (error) {
+        console.error("[DBService] Supabase upsert error:", error);
+        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+      }
       
       // Update local cache
       const current = await this.getAgreements();
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DBService] saveAgreement error:", error);
       throw error;
     }
@@ -69,12 +77,15 @@ export const DBService = {
         .update(updates)
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error("[DBService] Supabase update error:", error);
+        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+      }
       
       // Update local cache
       const current = await this.getAgreements();
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DBService] updateAgreement error:", error);
       throw error;
     }
@@ -89,12 +100,15 @@ export const DBService = {
         .delete()
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error("[DBService] Supabase delete error:", error);
+        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+      }
       
       // Update local cache
       const current = await this.getAgreements();
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DBService] deleteAgreement error:", error);
       throw error;
     }

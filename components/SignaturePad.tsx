@@ -13,6 +13,11 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
   const lastPos = useRef({ x: 0, y: 0 });
   const [isEmpty, setIsEmpty] = useState(true);
 
+  const onSaveRef = useRef(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -23,15 +28,22 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
       
-      // Reset context styles after resize
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = '#0f172a'; // Slate-900
+      // Only resize if dimensions actually changed
+      const newWidth = rect.width * dpr;
+      const newHeight = rect.height * dpr;
+      
+      if (canvas.width !== newWidth || canvas.height !== newHeight) {
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        ctx.scale(dpr, dpr);
+        
+        // Reset context styles after resize
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0f172a'; // Slate-900
+      }
     };
 
     resize();
@@ -97,7 +109,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
         isDrawing.current = false;
         // Use JPEG with 0.5 quality to prevent "413 Request Entity Too Large" errors
         // and avoid filling up localStorage quota.
-        onSave(canvas.toDataURL('image/jpeg', 0.5));
+        onSaveRef.current(canvas.toDataURL('image/jpeg', 0.5));
       }
     };
 
@@ -118,7 +130,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label }) => 
       canvas.removeEventListener('touchmove', draw);
       canvas.removeEventListener('touchend', stop);
     };
-  }, [onSave]);
+  }, []);
 
   const clear = () => {
     const canvas = canvasRef.current;

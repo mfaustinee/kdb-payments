@@ -73,8 +73,12 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       submittedAt: new Date().toISOString(),
     };
 
-    await new Promise(r => setTimeout(r, 1500));
-    onSubmit(requestData);
+    try {
+      await onSubmit(requestData);
+    } catch (error) {
+      console.error("Resubmission request error:", error);
+      setIsSubmitting(false);
+    }
   };
 
   const handleFinalSubmit = async () => {
@@ -103,9 +107,9 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
   const isStep3Valid = formData.installments?.every(i => i.dueDate);
   const isStep4Valid = hasReadTerms && formData.clientName && formData.clientTitle && formData.clientSignature;
 
-  const updateField = (field: keyof AgreementData, value: any) => {
+  const updateField = React.useCallback((field: keyof AgreementData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
   const updateInstallment = (index: number, value: string) => {
     if (!formData.installments) return;
@@ -124,6 +128,10 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       reader.readAsDataURL(file);
     }
   };
+
+  const handleSignatureSave = React.useCallback((sig: string) => {
+    updateField('clientSignature', sig);
+  }, []);
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-16 md:py-32">
@@ -307,7 +315,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                 </div>
 
                 {signatureMethod === 'draw' ? (
-                    <SignaturePad label="Authorized Digital Signature *" onSave={sig => updateField('clientSignature', sig)} />
+                    <SignaturePad label="Authorized Digital Signature *" onSave={handleSignatureSave} />
                 ) : (
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Signature Photo / Camera Capture *</label>
@@ -336,7 +344,6 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                                 ref={fileInputRef}
                                 className="hidden" 
                                 accept="image/*" 
-                                capture="environment" 
                                 onChange={handleFileUpload} 
                             />
                         </div>
