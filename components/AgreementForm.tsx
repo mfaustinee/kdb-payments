@@ -73,8 +73,12 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       submittedAt: new Date().toISOString(),
     };
 
-    await new Promise(r => setTimeout(r, 1500));
-    onSubmit(requestData);
+    try {
+      await onSubmit(requestData);
+    } catch (error) {
+      console.error("Resubmission request error:", error);
+      setIsSubmitting(false);
+    }
   };
 
   const handleFinalSubmit = async () => {
