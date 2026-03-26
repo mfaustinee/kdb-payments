@@ -1,0 +1,10 @@
+name = "kdb-payment-portal"
+pages_build_output_dir = "dist"
+
+[vars]
+# Add your environment variables here if needed for server-side
+# But for Vite, they are usually baked in during build time
+# if they are prefixed with VITE_
+VITE_SUPABASE_URL = ""
+VITE_SUPABASE_ANON_KEY = ""
+VITE_KDB_ADMIN_EMAIL = "kigunda.faustine@kdb.co.ke"
