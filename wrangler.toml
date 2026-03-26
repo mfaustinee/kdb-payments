@@ -7,4 +7,3 @@ pages_build_output_dir = "dist"
 # if they are prefixed with VITE_
 VITE_SUPABASE_URL = ""
 VITE_SUPABASE_ANON_KEY = ""
-VITE_KDB_ADMIN_EMAIL = ""

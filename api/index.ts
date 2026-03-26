@@ -90,8 +90,7 @@ async function startServer() {
   app.get("/api/config", (req, res) => {
     res.json({
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
-      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "",
-      VITE_KDB_ADMIN_EMAIL: process.env.VITE_KDB_ADMIN_EMAIL || process.env.KDB_ADMIN_EMAIL || ""
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
     });
   });
 
