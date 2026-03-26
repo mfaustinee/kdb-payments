@@ -90,7 +90,8 @@ async function startServer() {
       time: new Date().toISOString(),
       dataDirExists: fs.existsSync(DATA_DIR),
       writable: writable,
-      env: process.env.NODE_ENV
+      env: process.env.NODE_ENV,
+      supabaseConfigured: !!(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY)
     });
   });
 

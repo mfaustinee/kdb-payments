@@ -38,10 +38,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const checkHealth = async () => {
     setIsTestingConnection(true);
     try {
-      // In Supabase model, we just check if we can reach Supabase
+      // 1. Check Backend Health
+      const healthRes = await fetch('/api/health');
+      const healthData = await healthRes.json();
+      
+      // 2. Check Supabase via DBService
       const { DBService } = await import('../services/db.ts');
       const agreements = await DBService.getAgreements();
-      setSystemHealth({ status: 'ok', writable: true, count: agreements.length });
+      
+      setSystemHealth({ 
+        status: healthData.status || 'ok', 
+        writable: healthData.writable, 
+        backendSupabase: healthData.supabaseConfigured,
+        clientSupabase: !!import.meta.env.VITE_SUPABASE_URL,
+        count: agreements.length 
+      });
     } catch (e: any) {
       setSystemHealth({ status: 'error', message: e.message });
     } finally {
@@ -633,16 +644,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Supabase Integration Status</span>
                             </div>
                         </div>
-                        {envCheck.supabaseUrl && envCheck.supabaseKey ? (
-                            <div className="flex items-center space-x-3">
-                              <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CONNECTED</span>
-                            </div>
-                        ) : (
+                        <div className="flex flex-col items-end space-y-1">
+                          {envCheck.supabaseUrl && envCheck.supabaseKey ? (
+                              <div className="flex items-center space-x-3">
+                                <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CLIENT: CONNECTED</span>
+                              </div>
+                          ) : (
+                              <div className="flex items-center space-x-2">
+                                <AlertCircle className="w-4 h-4 text-rose-500" />
+                                <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">CLIENT: OFFLINE</span>
+                              </div>
+                          )}
+                          {systemHealth && (
                             <div className="flex items-center space-x-2">
-                              <AlertCircle className="w-4 h-4 text-rose-500" />
-                              <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">OFFLINE MODE</span>
+                              {systemHealth.backendSupabase ? (
+                                <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">BACKEND: CONNECTED</span>
+                              ) : (
+                                <span className="text-[9px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-100 uppercase tracking-tight">BACKEND: OFFLINE</span>
+                              )}
                             </div>
-                        )}
+                          )}
+                        </div>
                     </div>
 
                     {(!envCheck.supabaseUrl || !envCheck.supabaseKey) && (
