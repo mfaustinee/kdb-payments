@@ -35,6 +35,13 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
       const newHeight = rect.height * dpr;
       
       if (canvas.width !== newWidth || canvas.height !== newHeight) {
+        // Save current content if any, to restore after resize
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) tempCtx.drawImage(canvas, 0, 0);
+
         canvas.width = newWidth;
         canvas.height = newHeight;
         ctx.scale(dpr, dpr);
@@ -44,6 +51,18 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.strokeStyle = '#0f172a'; // Slate-900
+
+        // Restore content if it was not empty
+        if (tempCtx && (tempCanvas.width > 0 && tempCanvas.height > 0)) {
+          ctx.drawImage(tempCanvas, 0, 0, newWidth / dpr, newHeight / dpr);
+        } else if (value) {
+          // If we have a value but temp was empty (e.g. first resize), restore from value
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, newWidth / dpr, newHeight / dpr);
+          };
+          img.src = value;
+        }
       }
     };
 

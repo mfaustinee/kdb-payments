@@ -54,4 +54,4 @@ export const getEnv = (key: string, fallback: string = ''): string => {
   return import.meta.env[key] || fallback;
 };
 
-export const KDB_ADMIN_EMAIL = getEnv('VITE_KDB_ADMIN_EMAIL', 'kigunda.faustine@kdb.co.ke');
+export const KDB_ADMIN_EMAIL = getEnv('VITE_KDB_ADMIN_EMAIL', '');

@@ -18,7 +18,18 @@ if (supabaseUrl && supabaseKey) {
 export const DBService = {
   async getAgreements(): Promise<AgreementData[]> {
     if (!supabase) {
-      console.warn("[DBService] Supabase not initialized, using localStorage");
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch('/api/agreements');
+        if (response.ok) {
+          const data = await response.json();
+          localStorage.setItem('kdb_agreements_cache', JSON.stringify(data));
+          return data;
+        }
+      } catch (e) {
+        console.error("[DBService] Local API error:", e);
+      }
+      
       const local = localStorage.getItem('kdb_agreements_cache');
       return local ? JSON.parse(local) : [];
     }
@@ -43,10 +54,28 @@ export const DBService = {
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
     if (!supabase) {
-      const missing = [];
-      if (!import.meta.env.VITE_SUPABASE_URL) missing.push("VITE_SUPABASE_URL");
-      if (!import.meta.env.VITE_SUPABASE_ANON_KEY) missing.push("VITE_SUPABASE_ANON_KEY");
-      throw new Error(`Supabase not initialized. Missing: ${missing.join(", ")}`);
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch('/api/agreements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(agreement)
+        });
+        if (response.ok) {
+          // Update local cache
+          const current = await this.getAgreements();
+          localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
+          return;
+        }
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to save to local API");
+      } catch (e: any) {
+        console.error("[DBService] Local API save error:", e);
+        const missing = [];
+        if (!import.meta.env.VITE_SUPABASE_URL) missing.push("VITE_SUPABASE_URL");
+        if (!import.meta.env.VITE_SUPABASE_ANON_KEY) missing.push("VITE_SUPABASE_ANON_KEY");
+        throw new Error(`Submission failed. Supabase not initialized (Missing: ${missing.join(", ")}) and Local API failed: ${e.message}`);
+      }
     }
 
     try {
@@ -69,7 +98,25 @@ export const DBService = {
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
-    if (!supabase) throw new Error("Supabase not initialized");
+    if (!supabase) {
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch(`/api/agreements/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        if (response.ok) {
+          const current = await this.getAgreements();
+          localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
+          return;
+        }
+        throw new Error("Failed to update via local API");
+      } catch (e: any) {
+        console.error("[DBService] Local API update error:", e);
+        throw new Error(`Update failed: ${e.message}`);
+      }
+    }
 
     try {
       const { error } = await supabase
@@ -92,7 +139,23 @@ export const DBService = {
   },
 
   async deleteAgreement(id: string): Promise<void> {
-    if (!supabase) throw new Error("Supabase not initialized");
+    if (!supabase) {
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch(`/api/agreements/${id}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          const current = await this.getAgreements();
+          localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
+          return;
+        }
+        throw new Error("Failed to delete via local API");
+      } catch (e: any) {
+        console.error("[DBService] Local API delete error:", e);
+        throw new Error(`Delete failed: ${e.message}`);
+      }
+    }
 
     try {
       const { error } = await supabase
@@ -116,6 +179,17 @@ export const DBService = {
 
   async getDebtors(): Promise<DebtorRecord[]> {
     if (!supabase) {
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch('/api/debtors');
+        if (response.ok) {
+          const data = await response.json();
+          localStorage.setItem('kdb_debtors_cache', JSON.stringify(data));
+          return data;
+        }
+      } catch (e) {
+        console.error("[DBService] Local API error:", e);
+      }
       const local = localStorage.getItem('kdb_debtors_cache');
       return local ? JSON.parse(local) : [];
     }
@@ -141,7 +215,23 @@ export const DBService = {
   },
 
   async saveDebtors(debtors: DebtorRecord[]): Promise<void> {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch('/api/debtors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(debtors)
+        });
+        if (response.ok) {
+          localStorage.setItem('kdb_debtors_cache', JSON.stringify(debtors));
+          return;
+        }
+      } catch (e) {
+        console.error("[DBService] Local API error:", e);
+      }
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -158,6 +248,17 @@ export const DBService = {
 
   async getStaffConfig(): Promise<StaffConfig> {
     if (!supabase) {
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch('/api/staff');
+        if (response.ok) {
+          const data = await response.json();
+          localStorage.setItem('kdb_staff_cache', JSON.stringify(data));
+          return data;
+        }
+      } catch (e) {
+        console.error("[DBService] Local API error:", e);
+      }
       const local = localStorage.getItem('kdb_staff_cache');
       return local ? JSON.parse(local) : { officialSignature: '' };
     }
@@ -184,7 +285,23 @@ export const DBService = {
   },
 
   async saveStaffConfig(config: StaffConfig): Promise<void> {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn("[DBService] Supabase not initialized, trying local API");
+      try {
+        const response = await fetch('/api/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+        if (response.ok) {
+          localStorage.setItem('kdb_staff_cache', JSON.stringify(config));
+          return;
+        }
+      } catch (e) {
+        console.error("[DBService] Local API error:", e);
+      }
+      return;
+    }
 
     try {
       const { error } = await supabase

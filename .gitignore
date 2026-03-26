@@ -29,4 +29,3 @@ data/
 test_*.ts
 get_size.ts
 check_json.ts
-vercel-env-import.txt
