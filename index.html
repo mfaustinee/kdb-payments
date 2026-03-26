@@ -9,6 +9,20 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
   <div id="root"></div>
+  <script>
+    // Runtime environment variable injection
+    (async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          window._env_ = await response.json();
+          console.log("[Runtime] Environment variables loaded from server.");
+        }
+      } catch (e) {
+        console.warn("[Runtime] Failed to load environment variables from server, falling back to build-time values.");
+      }
+    })();
+  </script>
   <!-- Cache-busting comment: 2026-03-17-0556 -->
   <script type="module" src="/index.tsx"></script>
 </body>

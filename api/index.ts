@@ -6,11 +6,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
-// Load environment variables from .env file
-dotenv.config();
-
-console.log("[Server] Entry point reached.");
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -20,6 +15,11 @@ const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
 const LOG_FILE = path.join(DATA_DIR, "server.log");
 
+// Ensure data directory exists early for logging
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 // Logging utility - Optimized to avoid reading entire file on every log
 const logToFile = (message: string) => {
   const timestamp = new Date().toISOString();
@@ -27,11 +27,20 @@ const logToFile = (message: string) => {
   console.log(logEntry.trim());
   try {
     fs.appendFileSync(LOG_FILE, logEntry);
-    // Log rotation handled separately or less frequently to save memory
   } catch (e) {
     console.error("Failed to write to log file:", e);
   }
 };
+
+// Load environment variables from .env file
+dotenv.config();
+
+logToFile("[Server] Entry point reached.");
+logToFile(`[Server] Environment Variable Keys: ${Object.keys(process.env).filter(k => !k.includes("KEY") && !k.includes("SECRET") && !k.includes("PASSWORD")).join(", ")}`);
+const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const sKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+logToFile(`[Server] Supabase URL configured: ${!!sUrl} ${sUrl ? `(${sUrl.substring(0, 15)}...)` : "(empty)"}`);
+logToFile(`[Server] Supabase Key configured: ${!!sKey} ${sKey ? `(${sKey.substring(0, 10)}...)` : "(empty)"}`);
 
 // Periodic log rotation (every hour) to keep file size manageable
 setInterval(() => {
@@ -78,6 +87,14 @@ async function startServer() {
   });
 
   // API Routes
+  app.get("/api/config", (req, res) => {
+    res.json({
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "",
+      VITE_KDB_ADMIN_EMAIL: process.env.VITE_KDB_ADMIN_EMAIL || process.env.KDB_ADMIN_EMAIL || ""
+    });
+  });
+
   app.get("/api/health", (req, res) => {
     let writable = false;
     try {

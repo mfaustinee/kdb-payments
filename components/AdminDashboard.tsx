@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, KDB_ADMIN_EMAIL } from '../types';
+import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig } from '../types';
 import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity } from 'lucide-react';
 import { PDFPreview } from './PDFPreview';
 import { downloadAgreementPDF } from '../services/pdf';
@@ -51,10 +51,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         writable: healthData.writable, 
         backendSupabase: healthData.supabaseConfigured,
         clientSupabase: !!(import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL),
-        count: agreements.length 
+        count: agreements.length,
+        error: null
       });
     } catch (e: any) {
-      setSystemHealth({ status: 'error', message: e.message });
+      setSystemHealth({ 
+        status: 'error', 
+        message: e.message,
+        details: e.details || e.hint || ''
+      });
     } finally {
       setIsTestingConnection(false);
     }
@@ -675,6 +680,155 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                           {!envCheck.supabaseKey && <li>VITE_SUPABASE_ANON_KEY is not set in environment</li>}
                         </ul>
                         <p className="text-[9px] text-slate-500 italic mt-2">Add these to your project settings to enable Cloud Sync.</p>
+                      </div>
+                    )}
+
+                    {systemHealth?.status === 'error' && (
+                      <div className="p-5 bg-rose-50 rounded-[32px] border border-rose-200 space-y-4">
+                        <div className="flex items-start space-x-3">
+                          <AlertCircle className="w-5 h-5 text-rose-600 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-black text-rose-800 uppercase tracking-widest mb-1">Supabase Connection Error</p>
+                            <p className="text-[11px] text-rose-600 font-bold leading-relaxed">{systemHealth.message}</p>
+                            {systemHealth.details && <p className="text-[9px] text-rose-500 font-medium italic mt-1">{systemHealth.details}</p>}
+                          </div>
+                        </div>
+
+                        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-rose-100 space-y-3">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Required Database Schema</p>
+                          <p className="text-[10px] text-slate-600 font-medium">If you haven't set up your tables yet, copy and run this SQL in your Supabase SQL Editor:</p>
+                          
+                          <div className="relative group">
+                            <div className="bg-slate-900 rounded-xl p-3 overflow-x-auto max-h-[200px] scrollbar-thin scrollbar-thumb-slate-700">
+                              <pre className="text-[9px] text-emerald-400 font-mono leading-relaxed">
+{`CREATE TABLE IF NOT EXISTS agreements (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  date TEXT NOT NULL,
+  "clientEmail" TEXT,
+  "poBox" TEXT,
+  code TEXT,
+  "clientSignature" TEXT,
+  "officialSignature" TEXT,
+  "officialName" TEXT,
+  "rejectionReason" TEXT,
+  "resubmissionReason" TEXT,
+  "clientName" TEXT,
+  "clientTitle" TEXT,
+  "submittedAt" TEXT,
+  "approvedAt" TEXT,
+  "dboName" TEXT,
+  "premiseName" TEXT,
+  "permitNo" TEXT,
+  location TEXT,
+  county TEXT,
+  "totalArrears" NUMERIC,
+  "totalArrearsWords" TEXT,
+  "arrearsPeriod" TEXT,
+  "debitNoteNo" TEXT,
+  tel TEXT,
+  "arrearsBreakdown" JSONB,
+  installments JSONB
+);
+
+CREATE TABLE IF NOT EXISTS debtors (
+  id TEXT PRIMARY KEY,
+  "dboName" TEXT NOT NULL,
+  "premiseName" TEXT,
+  "permitNo" TEXT UNIQUE,
+  location TEXT,
+  county TEXT,
+  "totalArrears" NUMERIC,
+  "totalArrearsWords" TEXT,
+  "arrearsPeriod" TEXT,
+  "debitNoteNo" TEXT,
+  tel TEXT,
+  "arrearsBreakdown" JSONB,
+  installments JSONB
+);
+
+CREATE TABLE IF NOT EXISTS staff_config (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  "officialSignature" TEXT
+);
+
+-- Enable RLS and add policies for anonymous access if needed
+ALTER TABLE agreements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous access" ON agreements FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE debtors ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous access" ON debtors FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE staff_config ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous access" ON staff_config FOR ALL USING (true) WITH CHECK (true);`}
+                              </pre>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const sql = `CREATE TABLE IF NOT EXISTS agreements (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  date TEXT NOT NULL,
+  "clientEmail" TEXT,
+  "poBox" TEXT,
+  code TEXT,
+  "clientSignature" TEXT,
+  "officialSignature" TEXT,
+  "officialName" TEXT,
+  "rejectionReason" TEXT,
+  "resubmissionReason" TEXT,
+  "clientName" TEXT,
+  "clientTitle" TEXT,
+  "submittedAt" TEXT,
+  "approvedAt" TEXT,
+  "dboName" TEXT,
+  "premiseName" TEXT,
+  "permitNo" TEXT,
+  location TEXT,
+  county TEXT,
+  "totalArrears" NUMERIC,
+  "totalArrearsWords" TEXT,
+  "arrearsPeriod" TEXT,
+  "debitNoteNo" TEXT,
+  tel TEXT,
+  "arrearsBreakdown" JSONB,
+  installments JSONB
+);
+
+CREATE TABLE IF NOT EXISTS debtors (
+  id TEXT PRIMARY KEY,
+  "dboName" TEXT NOT NULL,
+  "premiseName" TEXT,
+  "permitNo" TEXT UNIQUE,
+  location TEXT,
+  county TEXT,
+  "totalArrears" NUMERIC,
+  "totalArrearsWords" TEXT,
+  "arrearsPeriod" TEXT,
+  "debitNoteNo" TEXT,
+  tel TEXT,
+  "arrearsBreakdown" JSONB,
+  installments JSONB
+);
+
+CREATE TABLE IF NOT EXISTS staff_config (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  "officialSignature" TEXT
+);
+
+ALTER TABLE agreements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous access" ON agreements FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE debtors ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous access" ON debtors FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE staff_config ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous access" ON staff_config FOR ALL USING (true) WITH CHECK (true);`;
+                                navigator.clipboard.writeText(sql);
+                                alert("SQL copied to clipboard!");
+                              }}
+                              className="absolute top-2 right-2 p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest transition-colors"
+                            >
+                              Copy SQL
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
 

@@ -83,7 +83,7 @@ const App: React.FC = () => {
             id: 'D001',
             dboName: 'Sunrise Dairy Ltd',
             premiseName: 'Sunrise Main Depot',
-            permitNo: 'KDB/MB/0001/0001234/2024',
+            permitNo: 'KDB/MB/0001234/2025',
             location: 'Thika Road, Ruiru',
             county: 'Kiambu',
             arrearsBreakdown: [{ id: '1', month: 'January 2024', amount: 150000 }],

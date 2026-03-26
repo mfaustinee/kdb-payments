@@ -19,11 +19,6 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY),
         'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL),
         'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY),
-        'import.meta.env.VITE_EMAILJS_SERVICE_ID': JSON.stringify(env.VITE_EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || process.env.EMAILJS_SERVICE_ID),
-        'import.meta.env.VITE_EMAILJS_TEMPLATE_ADMIN': JSON.stringify(env.VITE_EMAILJS_TEMPLATE_ADMIN || process.env.VITE_EMAILJS_TEMPLATE_ADMIN || process.env.EMAILJS_TEMPLATE_ADMIN),
-        'import.meta.env.VITE_EMAILJS_TEMPLATE_CLIENT': JSON.stringify(env.VITE_EMAILJS_TEMPLATE_CLIENT || process.env.VITE_EMAILJS_TEMPLATE_CLIENT || process.env.EMAILJS_TEMPLATE_CLIENT),
-        'import.meta.env.VITE_EMAILJS_PUBLIC_KEY': JSON.stringify(env.VITE_EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || process.env.EMAILJS_PUBLIC_KEY),
-        'import.meta.env.VITE_EMAILJS_ACCESS_TOKEN': JSON.stringify(env.VITE_EMAILJS_ACCESS_TOKEN || process.env.VITE_EMAILJS_ACCESS_TOKEN || process.env.EMAILJS_ACCESS_TOKEN),
         'import.meta.env.VITE_KDB_ADMIN_EMAIL': JSON.stringify(env.VITE_KDB_ADMIN_EMAIL || process.env.VITE_KDB_ADMIN_EMAIL || process.env.KDB_ADMIN_EMAIL)
       },
       resolve: {

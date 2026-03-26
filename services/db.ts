@@ -1,26 +1,30 @@
 import { AgreementData, DebtorRecord, StaffConfig } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client if environment variables are present
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY || '';
-
 let supabase: SupabaseClient | null = null;
 
-if (supabaseUrl && supabaseKey) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseKey);
-    console.log("[DBService] Supabase initialized successfully");
-  } catch (e) {
-    console.error("[DBService] Supabase init error:", e);
+const getSupabase = () => {
+  if (supabase) return supabase;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL || '';
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY || '';
+
+  if (supabaseUrl && supabaseKey) {
+    try {
+      supabase = createClient(supabaseUrl, supabaseKey);
+      console.log("[DBService] Supabase initialized successfully");
+      return supabase;
+    } catch (e) {
+      console.error("[DBService] Supabase init error:", e);
+    }
   }
-} else {
-  console.warn("[DBService] Supabase credentials missing. URL:", !!supabaseUrl, "Key:", !!supabaseKey);
-}
+  return null;
+};
 
 export const DBService = {
   async getAgreements(): Promise<AgreementData[]> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch('/api/agreements');
@@ -38,7 +42,7 @@ export const DBService = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('agreements')
         .select('*')
         .order('submittedAt', { ascending: false });
@@ -56,7 +60,8 @@ export const DBService = {
   },
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch('/api/agreements', {
@@ -75,14 +80,16 @@ export const DBService = {
       } catch (e: any) {
         console.error("[DBService] Local API save error:", e);
         const missing = [];
-        if (!import.meta.env.VITE_SUPABASE_URL) missing.push("VITE_SUPABASE_URL");
-        if (!import.meta.env.VITE_SUPABASE_ANON_KEY) missing.push("VITE_SUPABASE_ANON_KEY");
+        const sUrl = import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL;
+        const sKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY;
+        if (!sUrl) missing.push("VITE_SUPABASE_URL");
+        if (!sKey) missing.push("VITE_SUPABASE_ANON_KEY");
         throw new Error(`Submission failed. Supabase not initialized (Missing: ${missing.join(", ")}) and Local API failed: ${e.message}`);
       }
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from('agreements')
         .upsert(agreement);
       
@@ -101,7 +108,8 @@ export const DBService = {
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch(`/api/agreements/${id}`, {
@@ -122,7 +130,7 @@ export const DBService = {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from('agreements')
         .update(updates)
         .eq('id', id);
@@ -142,7 +150,8 @@ export const DBService = {
   },
 
   async deleteAgreement(id: string): Promise<void> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch(`/api/agreements/${id}`, {
@@ -161,7 +170,7 @@ export const DBService = {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from('agreements')
         .delete()
         .eq('id', id);
@@ -181,7 +190,8 @@ export const DBService = {
   },
 
   async getDebtors(): Promise<DebtorRecord[]> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch('/api/debtors');
@@ -198,7 +208,7 @@ export const DBService = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('debtors')
         .select('*')
         .order('dboName', { ascending: true });
@@ -218,7 +228,8 @@ export const DBService = {
   },
 
   async saveDebtors(debtors: DebtorRecord[]): Promise<void> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch('/api/debtors', {
@@ -237,7 +248,7 @@ export const DBService = {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from('debtors')
         .upsert(debtors);
       
@@ -250,7 +261,8 @@ export const DBService = {
   },
 
   async getStaffConfig(): Promise<StaffConfig> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch('/api/staff');
@@ -267,7 +279,7 @@ export const DBService = {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('staff_config')
         .select('*')
         .eq('id', 1)
@@ -288,7 +300,8 @@ export const DBService = {
   },
 
   async saveStaffConfig(config: StaffConfig): Promise<void> {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
         const response = await fetch('/api/staff', {
@@ -307,7 +320,7 @@ export const DBService = {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from('staff_config')
         .upsert({ id: 1, ...config });
       
