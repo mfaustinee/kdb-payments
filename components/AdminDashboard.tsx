@@ -40,7 +40,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
     try {
       // 1. Check Backend Health
       const healthRes = await fetch('/api/health');
-      const healthData = await healthRes.json();
+      if (!healthRes.ok) {
+        const text = await healthRes.text();
+        throw new Error(`Backend health check failed (${healthRes.status}): ${text.substring(0, 100)}`);
+      }
+      let healthData;
+      try {
+        healthData = await healthRes.json();
+      } catch (jsonErr) {
+        const text = await healthRes.text();
+        throw new Error(`Invalid JSON from /api/health: ${text.substring(0, 100)}`);
+      }
       
       // 2. Check Supabase via DBService
       const { DBService } = await import('../services/db.ts');
@@ -55,6 +65,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         error: null
       });
     } catch (e: any) {
+      console.error("[HealthCheck] Error:", e);
       setSystemHealth({ 
         status: 'error', 
         message: e.message,
@@ -226,7 +237,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
 
   const envCheck = {
     supabaseUrl: !!(import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL),
-    supabaseKey: !!(import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY)
+    supabaseKey: !!(import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY),
+    importMetaUrl: !!import.meta.env.VITE_SUPABASE_URL,
+    windowEnvUrl: !!(window as any)._env_?.VITE_SUPABASE_URL
   };
 
   return (

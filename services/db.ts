@@ -12,13 +12,20 @@ const fetchConfig = async () => {
     try {
       const response = await fetch('/api/config');
       if (response.ok) {
-        const config = await response.json();
-        (window as any)._env_ = config;
-        console.log("[DBService] Config loaded from server");
-        return config;
+        const text = await response.text();
+        try {
+          const config = JSON.parse(text);
+          (window as any)._env_ = config;
+          console.log("[DBService] Config loaded from server");
+          return config;
+        } catch (jsonErr) {
+          console.error("[DBService] Invalid JSON from /api/config:", text.substring(0, 100));
+        }
+      } else {
+        console.error(`[DBService] Failed to fetch config (${response.status})`);
       }
     } catch (e) {
-      console.error("[DBService] Failed to fetch config:", e);
+      console.error("[DBService] Network error fetching config:", e);
     } finally {
       isFetchingConfig = false;
     }

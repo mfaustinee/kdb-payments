@@ -39,6 +39,7 @@ logToFile("[Server] Entry point reached.");
 logToFile(`[Server] Environment Variable Keys: ${Object.keys(process.env).filter(k => !k.includes("KEY") && !k.includes("SECRET") && !k.includes("PASSWORD")).join(", ")}`);
 const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const sKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+logToFile(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
 logToFile(`[Server] Supabase URL configured: ${!!sUrl} ${sUrl ? `(${sUrl.substring(0, 15)}...)` : "(empty)"}`);
 logToFile(`[Server] Supabase Key configured: ${!!sKey} ${sKey ? `(${sKey.substring(0, 10)}...)` : "(empty)"}`);
 
@@ -64,6 +65,50 @@ async function startServer() {
     const app = express();
     const PORT = 3000;
 
+    // API Routes - MOVE TO TOP
+    app.get("/api/debug-env", (req, res) => {
+      logToFile("[API] Serving /api/debug-env");
+      res.json({
+        NODE_ENV: process.env.NODE_ENV,
+        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? "SET" : "NOT SET",
+        VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? "SET" : "NOT SET",
+        PORT: process.env.PORT,
+        APP_URL: process.env.APP_URL
+      });
+    });
+
+    app.get("/api/config", (req, res) => {
+      logToFile("[API] Serving /api/config");
+      res.json({
+        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
+        VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+      });
+    });
+
+    app.get("/api/health", (req, res) => {
+      logToFile("[API] Serving /api/health");
+      let writable = false;
+      try {
+        const testFile = path.join(DATA_DIR, ".write_test");
+        fs.writeFileSync(testFile, "test");
+        fs.unlinkSync(testFile);
+        writable = true;
+      } catch (e) {
+        logToFile(`[API] Health check write test failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      res.json({
+        status: "ok",
+        writable,
+        supabaseConfigured: !!(
+          process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+        ) && !!(
+          process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+        ),
+        timestamp: new Date().toISOString()
+      });
+    });
+
   // Improved CORS configuration
   app.use(cors({
     origin: '*',
@@ -75,49 +120,6 @@ async function startServer() {
   app.use(compression());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-  // Request logging middleware - only log errors to file to keep it clean
-  app.use((req, res, next) => {
-    res.on('finish', () => {
-      if (res.statusCode >= 400) {
-        logToFile(`${req.method} ${req.url} ${res.statusCode}`);
-      }
-    });
-    next();
-  });
-
-  // API Routes
-  app.get("/api/config", (req, res) => {
-    res.json({
-      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
-      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
-    });
-  });
-
-  app.get("/api/health", (req, res) => {
-    let writable = false;
-    try {
-      const testFile = path.join(DATA_DIR, ".write_test");
-      fs.writeFileSync(testFile, "test");
-      fs.unlinkSync(testFile);
-      writable = true;
-    } catch (e) {
-      writable = false;
-    }
-
-    res.json({ 
-      status: "ok", 
-      time: new Date().toISOString(),
-      dataDirExists: fs.existsSync(DATA_DIR),
-      writable: writable,
-      env: process.env.NODE_ENV,
-      supabaseConfigured: !!(
-        process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-      ) && !!(
-        process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-      )
-    });
-  });
 
   app.get("/api/logs", (req, res) => {
     try {
@@ -364,14 +366,18 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    logToFile("[Server] Starting Vite in middleware mode...");
     try {
       const { createServer: createViteServer } = await import("vite");
+      logToFile("[Server] Vite module imported.");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
       });
+      logToFile("[Server] Vite middleware created successfully.");
       app.use(vite.middlewares);
     } catch (e: any) {
+      logToFile(`[Server] ERROR creating Vite server: ${e.message}`);
       console.error("Failed to initialize Vite middleware:", e);
     }
   } else {
@@ -415,9 +421,15 @@ async function startServer() {
 
   console.log(`[Server] Attempting to listen on port ${PORT}...`);
   if (process.env.NODE_ENV !== "test") {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`[Server] SUCCESS: Running on http://0.0.0.0:${PORT}`);
-    });
+    logToFile("[Server] Attempting to start server on port " + PORT);
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    logToFile(`[Server] SUCCESS: Running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] SUCCESS: Running on http://0.0.0.0:${PORT}`);
+  });
+  server.on('error', (e: any) => {
+    logToFile(`[Server] ERROR starting server: ${e.message}`);
+    console.error(`[Server] ERROR starting server: ${e.message}`);
+  });
   }
 
   return app;
