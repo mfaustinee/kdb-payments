@@ -66,13 +66,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
       const config = await DBService.fetchConfig();
       const agreements = await DBService.getAgreements();
       
+      const isConfigured = !!(config.VITE_SUPABASE_URL && config.VITE_SUPABASE_ANON_KEY);
+      
       setSystemHealth({ 
         status: healthData.status || 'ok', 
         writable: healthData.writable, 
         backendSupabase: healthData.supabaseConfigured,
-        clientSupabase: !!config,
+        clientSupabase: isConfigured,
         count: agreements.length,
-        error: null
+        error: isConfigured ? null : "Missing Configuration: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set in environment"
       });
     } catch (e: any) {
       console.error("[HealthCheck] Error:", e);

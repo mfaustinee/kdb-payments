@@ -61,9 +61,12 @@ setInterval(() => {
 }, 3600000);
 
 async function startServer() {
+  logToFile("[Server] startServer() called");
   try {
     const app = express();
     const PORT = 3000;
+
+    logToFile("[Server] Initializing middleware...");
 
     // Middleware FIRST - Ensure all routes benefit from CORS, compression and body parsing
     app.use(cors({
@@ -71,12 +74,16 @@ async function startServer() {
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
     }));
-    app.options('*', cors());
+    logToFile("[Server] CORS middleware added.");
     app.use(compression());
+    logToFile("[Server] Compression middleware added.");
     app.use(express.json({ limit: '50mb' }));
+    logToFile("[Server] JSON middleware added.");
     app.use(express.urlencoded({ limit: '50mb', extended: true }));
+    logToFile("[Server] URLencoded middleware added.");
 
-    // API Routes
+    logToFile("[Server] Registering API routes...");
+    
     app.get("/api/debug-env", (req, res) => {
       logToFile("[API] Serving /api/debug-env");
       res.json({
@@ -120,31 +127,21 @@ async function startServer() {
       });
     });
 
-  // Improved CORS configuration
-  app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-  }));
-  app.options('*all', cors()); 
-  
-  app.use(compression());
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-  app.get("/api/logs", (req, res) => {
-    try {
-      if (fs.existsSync(LOG_FILE)) {
-        res.type('text/plain').send(fs.readFileSync(LOG_FILE, 'utf-8'));
-      } else {
-        res.send("No logs found.");
+    app.get("/api/logs", (req, res) => {
+      logToFile("[API] Serving /api/logs");
+      try {
+        if (fs.existsSync(LOG_FILE)) {
+          res.type('text/plain').send(fs.readFileSync(LOG_FILE, 'utf-8'));
+        } else {
+          res.send("No logs found.");
+        }
+      } catch (e) {
+        res.status(500).send("Error reading logs");
       }
-    } catch (e) {
-      res.status(500).send("Error reading logs");
-    }
-  });
+    });
 
-  app.get(["/api/agreements", "/api/agreements/"], async (req, res) => {
+    logToFile("[Server] Registering data routes...");
+    app.get("/api/agreements", async (req, res) => {
     try {
       if (!fs.existsSync(AGREEMENTS_FILE)) {
         return res.json([]);
@@ -270,10 +267,9 @@ async function startServer() {
     }
   });
 
-  app.patch(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
-  app.post(["/api/agreements/:id", "/api/agreements/:id/"], handleUpdate);
-
-  app.delete(["/api/agreements/:id", "/api/agreements/:id/"], async (req, res) => {
+    app.patch("/api/agreements/:id", handleUpdate);
+    app.post("/api/agreements/:id", handleUpdate);
+    app.delete("/api/agreements/:id", async (req, res) => {
     try {
       const data = await fs.promises.readFile(AGREEMENTS_FILE, "utf-8");
       const agreements = JSON.parse(data);
@@ -288,7 +284,8 @@ async function startServer() {
     }
   });
 
-  app.get(["/api/debtors", "/api/debtors/"], async (req, res) => {
+    logToFile("[Server] Registering debtors routes...");
+    app.get("/api/debtors", async (req, res) => {
     try {
       if (!fs.existsSync(DEBTORS_FILE)) {
         return res.json([]);
@@ -305,7 +302,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/debtors", "/api/debtors/"], async (req, res) => {
+    app.post("/api/debtors", async (req, res) => {
     try {
       logToFile(`Attempting to save ${req.body?.length} debtors`);
       await fs.promises.writeFile(DEBTORS_FILE, JSON.stringify(req.body, null, 2));
@@ -317,7 +314,8 @@ async function startServer() {
     }
   });
 
-  app.get(["/api/staff", "/api/staff/"], async (req, res) => {
+    logToFile("[Server] Registering staff routes...");
+    app.get("/api/staff", async (req, res) => {
     try {
       if (!fs.existsSync(STAFF_FILE)) {
         return res.json({ officialSignature: '' });
@@ -334,7 +332,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/staff", "/api/staff/"], async (req, res) => {
+    app.post("/api/staff", async (req, res) => {
     try {
       logToFile(`Attempting to save staff config`);
       await fs.promises.writeFile(STAFF_FILE, JSON.stringify(req.body, null, 2));
@@ -365,17 +363,10 @@ async function startServer() {
     }
   });
 
-  // API Catch-all
-  app.all("/api/*", (req, res) => {
-    logToFile(`API 404: ${req.method} ${req.url}`);
-    res.status(404).json({ 
-      error: "Not Found", 
-      message: `API endpoint ${req.method} ${req.url} not found`,
-      path: req.path
-    });
-  });
+    logToFile("[Server] API routes registered. Skipping catch-all for stability...");
 
-  // Vite middleware for development
+    logToFile("[Server] Setting up SPA fallback...");
+    // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     logToFile("[Server] Starting Vite in middleware mode...");
     try {
