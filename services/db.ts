@@ -67,6 +67,9 @@ const getSupabase = async () => {
 };
 
 export const DBService = {
+  async fetchConfig() {
+    return await fetchConfig();
+  },
   async getAgreements(): Promise<AgreementData[]> {
     const client = await getSupabase();
     if (!client) {

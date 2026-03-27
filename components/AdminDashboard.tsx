@@ -32,7 +32,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingDebtor, setIsAddingDebtor] = useState(false);
   const [editingDebtorId, setEditingDebtorId] = useState<string | null>(null);
-  const [systemHealth, setSystemHealth] = useState<any>(null);
+  const [systemHealth, setSystemHealth] = useState<any>({
+    status: 'checking',
+    writable: false,
+    backendSupabase: false,
+    clientSupabase: false,
+    count: 0,
+    error: null
+  });
   const [isTestingConnection, setIsTestingConnection] = useState(false);
 
   const checkHealth = async () => {
@@ -54,13 +61,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
       
       // 2. Check Supabase via DBService
       const { DBService } = await import('../services/db.ts');
+      const config = await DBService.fetchConfig();
       const agreements = await DBService.getAgreements();
       
       setSystemHealth({ 
         status: healthData.status || 'ok', 
         writable: healthData.writable, 
         backendSupabase: healthData.supabaseConfigured,
-        clientSupabase: !!(import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL),
+        clientSupabase: !!config,
         count: agreements.length,
         error: null
       });
@@ -233,13 +241,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const handleDownloadPDF = async () => {
     if (!selectedReview) return;
     await downloadAgreementPDF(selectedReview, 'formal-agreement-hidden');
-  };
-
-  const envCheck = {
-    supabaseUrl: !!(import.meta.env.VITE_SUPABASE_URL || (window as any)._env_?.VITE_SUPABASE_URL),
-    supabaseKey: !!(import.meta.env.VITE_SUPABASE_ANON_KEY || (window as any)._env_?.VITE_SUPABASE_ANON_KEY),
-    importMetaUrl: !!import.meta.env.VITE_SUPABASE_URL,
-    windowEnvUrl: !!(window as any)._env_?.VITE_SUPABASE_URL
   };
 
   return (
@@ -653,17 +654,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
             </div>
             
             <div className="space-y-6">
-                <div className={`p-6 rounded-[32px] border flex flex-col space-y-4 transition-all ${envCheck.supabaseUrl && envCheck.supabaseKey ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                <div className={`p-6 rounded-[32px] border flex flex-col space-y-4 transition-all ${systemHealth.clientSupabase ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
-                            <Activity className={`w-5 h-5 ${envCheck.supabaseUrl ? 'text-emerald-500' : 'text-rose-500'}`} />
+                            <Activity className={`w-5 h-5 ${systemHealth.clientSupabase ? 'text-emerald-500' : 'text-rose-500'}`} />
                             <div>
-                              <span className={`text-xs font-bold block ${envCheck.supabaseUrl ? 'text-emerald-700' : 'text-rose-700'}`}>Cloud Persistence</span>
+                              <span className={`text-xs font-bold block ${systemHealth.clientSupabase ? 'text-emerald-700' : 'text-rose-700'}`}>Cloud Persistence</span>
                               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Supabase Integration Status</span>
                             </div>
                         </div>
                         <div className="flex flex-col items-end space-y-1">
-                          {envCheck.supabaseUrl && envCheck.supabaseKey ? (
+                          {systemHealth.clientSupabase ? (
                               <div className="flex items-center space-x-3">
                                 <span className="text-[9px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100">CLIENT: CONNECTED</span>
                               </div>
@@ -685,12 +686,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                         </div>
                     </div>
 
-                    {(!envCheck.supabaseUrl || !envCheck.supabaseKey) && (
+                    {!systemHealth.clientSupabase && (
                       <div className="p-4 bg-white/50 rounded-2xl border border-rose-200 space-y-2">
                         <p className="text-[10px] font-bold text-rose-700 uppercase tracking-tight">Missing Configuration:</p>
                         <ul className="text-[9px] text-rose-600 space-y-1 list-disc ml-4 font-medium">
-                          {!envCheck.supabaseUrl && <li>VITE_SUPABASE_URL is not set in environment</li>}
-                          {!envCheck.supabaseKey && <li>VITE_SUPABASE_ANON_KEY is not set in environment</li>}
+                          <li>VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set in environment</li>
                         </ul>
                         <p className="text-[9px] text-slate-500 italic mt-2">Add these to your project settings to enable Cloud Sync.</p>
                       </div>
@@ -845,7 +845,7 @@ CREATE POLICY "Allow anonymous access" ON staff_config FOR ALL USING (true) WITH
                       </div>
                     )}
 
-                    {envCheck.supabaseUrl && envCheck.supabaseKey ? (
+                    {systemHealth.clientSupabase ? (
                       <div className="flex flex-col sm:flex-row items-center gap-3">
                         <div className="text-[10px] font-bold text-emerald-700 bg-white px-4 py-2 rounded-xl shadow-sm border border-emerald-100">
                           Primary Data Store: Supabase Cloud

@@ -111,14 +111,10 @@ const App: React.FC = () => {
     try {
       const submission = { ...data, submittedAt: new Date().toISOString() };
       
-      // Check if it's an update (resubmission request)
-      const existing = agreements.find(a => a.id === data.id);
-      if (existing) {
-        await DBService.updateAgreement(data.id, submission);
-      } else {
-        await DBService.saveAgreement(submission);
-      }
+      // Save or update the agreement
+      await DBService.saveAgreement(submission);
       
+      // Refresh local state
       const updated = await DBService.getAgreements();
       setAgreements(updated);
       setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
@@ -127,8 +123,7 @@ const App: React.FC = () => {
       navigate('/success');
     } catch (error: any) {
       console.error("Submission failed:", error);
-      const errorMessage = error?.message || "Unknown error";
-      alert(`Submission failed: ${errorMessage}\n\nPlease ensure your Supabase URL and Key are correct in your .env file and that the 'agreements' table exists.`);
+      alert("Submission failed. Please try again.");
       throw error;
     } finally {
       setIsSyncing(false);

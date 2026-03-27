@@ -48,7 +48,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
         }
         if (existing.status === 'submitted') {
           setSelectedDebtor(found);
-          setFormData(prev => ({ ...prev, ...found, id: existing.id })); // Use existing ID
+          setFormData(prev => ({ ...prev, ...existing })); // Use existing agreement data
           setStep(5); // Request resubmission step
           return;
         }
