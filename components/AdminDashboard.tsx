@@ -47,16 +47,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
     try {
       // 1. Check Backend Health
       const healthRes = await fetch('/api/health');
+      const healthResClone = healthRes.clone();
+      const healthText = await healthRes.text();
+      
       if (!healthRes.ok) {
-        const text = await healthRes.text();
-        throw new Error(`Backend health check failed (${healthRes.status}): ${text.substring(0, 100)}`);
+        throw new Error(`Backend health check failed (${healthRes.status}): ${healthText.substring(0, 100)}`);
       }
+      
       let healthData;
       try {
-        healthData = await healthRes.json();
+        healthData = await healthResClone.json();
       } catch (jsonErr) {
-        const text = await healthRes.text();
-        throw new Error(`Invalid JSON from /api/health: ${text.substring(0, 100)}`);
+        throw new Error(`Invalid JSON from /api/health: ${healthText.substring(0, 100)}`);
       }
       
       // 2. Check Supabase via DBService

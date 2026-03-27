@@ -65,7 +65,18 @@ async function startServer() {
     const app = express();
     const PORT = 3000;
 
-    // API Routes - MOVE TO TOP
+    // Middleware FIRST - Ensure all routes benefit from CORS, compression and body parsing
+    app.use(cors({
+      origin: '*',
+      methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    }));
+    app.options('*', cors());
+    app.use(compression());
+    app.use(express.json({ limit: '50mb' }));
+    app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+    // API Routes
     app.get("/api/debug-env", (req, res) => {
       logToFile("[API] Serving /api/debug-env");
       res.json({
@@ -355,7 +366,7 @@ async function startServer() {
   });
 
   // API Catch-all
-  app.all("/api/*all", (req, res) => {
+  app.all("/api/*", (req, res) => {
     logToFile(`API 404: ${req.method} ${req.url}`);
     res.status(404).json({ 
       error: "Not Found", 
@@ -384,7 +395,7 @@ async function startServer() {
     console.log("[Server] Serving static files from dist...");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
+    app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
