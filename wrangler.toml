@@ -5,6 +5,6 @@ pages_build_output_dir = "dist"
 # Add your environment variables here if needed for server-side
 # But for Vite, they are usually baked in during build time
 # if they are prefixed with VITE_
-VITE_SUPABASE_URL = ""
-VITE_SUPABASE_ANON_KEY = ""
+VITE_SUPABASE_URL = "https://odolazcniphinupgyaqo.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kb2xhemNuaXBoaW51cGd5YXFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0MjAzMjQsImV4cCI6MjA4Njk5NjMyNH0.CgWtTe7SPOAGTb6hqbwgLu-U9d6uWaaOtjjn-VwV4wU"
 GEMINI_API_KEY = ""

@@ -82,6 +82,12 @@ async function startServer() {
     app.use(express.urlencoded({ limit: '50mb', extended: true }));
     logToFile("[Server] URLencoded middleware added.");
 
+    // Request Logger
+    app.use((req, res, next) => {
+      logToFile(`[Request] ${req.method} ${req.url}`);
+      next();
+    });
+
     logToFile("[Server] Registering API routes...");
     
     app.get("/api/debug-env", (req, res) => {
@@ -96,10 +102,13 @@ async function startServer() {
     });
 
     app.get("/api/config", (req, res) => {
-      logToFile("[API] Serving /api/config");
+      const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+      const sKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+      
+      logToFile(`[API] Serving /api/config. Configured: ${!!(sUrl && sKey)}`);
       res.json({
-        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
-        VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+        VITE_SUPABASE_URL: sUrl,
+        VITE_SUPABASE_ANON_KEY: sKey
       });
     });
 
@@ -115,14 +124,18 @@ async function startServer() {
         logToFile(`[API] Health check write test failed: ${e instanceof Error ? e.message : String(e)}`);
       }
 
+      const supabaseConfigured = !!(
+        process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+      ) && !!(
+        process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+      );
+
+      logToFile(`[API] Health check result: writable=${writable}, supabaseConfigured=${supabaseConfigured}`);
+
       res.json({
         status: "ok",
         writable,
-        supabaseConfigured: !!(
-          process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-        ) && !!(
-          process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-        ),
+        supabaseConfigured,
         timestamp: new Date().toISOString()
       });
     });
@@ -159,7 +172,7 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/agreements", "/api/agreements/"], async (req, res) => {
+  app.post("/api/agreements", async (req, res) => {
     try {
       logToFile(`Attempting to save agreement: ${req.body?.id}`);
       if (!req.body || !req.body.id) {
@@ -225,7 +238,7 @@ async function startServer() {
     }
   };
 
-  app.post(["/api/agreements/sync", "/api/agreements/sync/"], async (req, res) => {
+  app.post("/api/agreements/sync", async (req, res) => {
     try {
       const incomingAgreements = req.body;
       logToFile(`Sync request received with ${incomingAgreements?.length} agreements`);
@@ -366,6 +379,12 @@ async function startServer() {
     logToFile("[Server] API routes registered. Skipping catch-all for stability...");
 
     logToFile("[Server] Setting up SPA fallback...");
+    // Catch-all for /api routes to prevent them from falling through to Vite's HTML fallback
+    app.all("/api/*", (req, res) => {
+      logToFile(`[API] 404 Not Found: ${req.method} ${req.url}`);
+      res.status(404).json({ error: "API route not found" });
+    });
+
     // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     logToFile("[Server] Starting Vite in middleware mode...");

@@ -10,12 +10,16 @@ const fetchConfig = async () => {
   isFetchingConfig = true;
   configPromise = (async () => {
     try {
+      console.log("[DBService] Fetching config from /api/config...");
       const response = await fetch('/api/config');
       if (response.ok) {
         try {
           const config = await response.json();
           (window as any)._env_ = config;
-          console.log("[DBService] Config loaded from server");
+          console.log("[DBService] Config loaded successfully from server:", {
+            hasUrl: !!config.VITE_SUPABASE_URL,
+            hasKey: !!config.VITE_SUPABASE_ANON_KEY
+          });
           return config;
         } catch (jsonErr) {
           console.error("[DBService] Failed to parse config JSON:", jsonErr);
@@ -56,11 +60,13 @@ const getSupabase = async () => {
   if (supabaseUrl && supabaseKey) {
     try {
       supabase = createClient(supabaseUrl, supabaseKey);
-      console.log("[DBService] Supabase initialized successfully");
+      console.log("[DBService] Supabase client initialized successfully");
       return supabase;
     } catch (e) {
       console.error("[DBService] Supabase init error:", e);
     }
+  } else {
+    console.warn("[DBService] Supabase credentials missing. URL:", !!supabaseUrl, "Key:", !!supabaseKey);
   }
   
   return null;

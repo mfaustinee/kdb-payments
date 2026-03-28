@@ -45,10 +45,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   const checkHealth = async () => {
     setIsTestingConnection(true);
     try {
+      console.log("[HealthCheck] Starting health checks...");
       // 1. Check Backend Health
       const healthRes = await fetch('/api/health');
       const healthResClone = healthRes.clone();
       const healthText = await healthRes.text();
+      
+      console.log(`[HealthCheck] /api/health response status: ${healthRes.status}`);
       
       if (!healthRes.ok) {
         throw new Error(`Backend health check failed (${healthRes.status}): ${healthText.substring(0, 100)}`);
@@ -56,17 +59,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
       
       let healthData;
       try {
-        healthData = await healthResClone.json();
+        healthData = JSON.parse(healthText);
+        console.log("[HealthCheck] /api/health data:", healthData);
       } catch (jsonErr) {
-        throw new Error(`Invalid JSON from /api/health: ${healthText.substring(0, 100)}`);
+        console.error("[HealthCheck] /api/health JSON parse error:", jsonErr);
+        const isHtml = healthText.trim().startsWith('<!DOCTYPE html>') || healthText.trim().startsWith('<html');
+        throw new Error(`Invalid response from /api/health. Expected JSON, but received ${isHtml ? 'HTML (likely a 404 fallback)' : 'invalid text'}. Content: ${healthText.substring(0, 100)}...`);
       }
       
       // 2. Check Supabase via DBService
       const { DBService } = await import('../services/db.ts');
       const config = await DBService.fetchConfig();
-      const agreements = await DBService.getAgreements();
+      console.log("[HealthCheck] Supabase config from server:", config);
       
-      const isConfigured = !!(config.VITE_SUPABASE_URL && config.VITE_SUPABASE_ANON_KEY);
+      const agreements = await DBService.getAgreements();
+      console.log(`[HealthCheck] Agreements count: ${agreements.length}`);
+      
+      const isConfigured = !!(config && config.VITE_SUPABASE_URL && config.VITE_SUPABASE_ANON_KEY);
       
       setSystemHealth({ 
         status: healthData.status || 'ok', 
