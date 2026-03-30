@@ -2,6 +2,7 @@ import { AgreementData, DebtorRecord, StaffConfig } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabase: SupabaseClient | null = null;
+let supabasePromise: Promise<SupabaseClient | null> | null = null;
 let isFetchingConfig = false;
 let configPromise: Promise<any> | null = null;
 
@@ -40,36 +41,58 @@ const fetchConfig = async () => {
 
 const getSupabase = async () => {
   if (supabase) return supabase;
+  if (supabasePromise) return supabasePromise;
 
-  let env = (window as any)._env_;
-  
-  // If env is not available, try to fetch it
-  if (!env && !isFetchingConfig) {
-    await fetchConfig();
-    env = (window as any)._env_;
-  } else if (isFetchingConfig && configPromise) {
-    // Wait for the existing fetch to complete
-    await configPromise;
-    env = (window as any)._env_;
-  }
-
-  env = env || {};
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL || '';
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || '';
-
-  if (supabaseUrl && supabaseKey) {
-    try {
-      supabase = createClient(supabaseUrl, supabaseKey);
-      console.log("[DBService] Supabase client initialized successfully");
-      return supabase;
-    } catch (e) {
-      console.error("[DBService] Supabase init error:", e);
+  supabasePromise = (async () => {
+    let env = (window as any)._env_;
+    
+    if (!env) {
+      env = await fetchConfig() || {};
     }
-  } else {
-    console.warn("[DBService] Supabase credentials missing. URL:", !!supabaseUrl, "Key:", !!supabaseKey);
-  }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL || '';
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || '';
+
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const client = createClient(supabaseUrl, supabaseKey);
+        supabase = client;
+        console.log("[DBService] Supabase client initialized successfully (Singleton)");
+        return supabase;
+      } catch (e) {
+        console.error("[DBService] Supabase init error:", e);
+      }
+    } else {
+      console.warn("[DBService] Supabase credentials missing. URL:", !!supabaseUrl, "Key:", !!supabaseKey);
+    }
+    supabasePromise = null; // Reset if failed so we can try again
+    return null;
+  })();
   
-  return null;
+  return supabasePromise;
+};
+
+// Helper to map JS camelCase to DB lowercase
+const toDb = (obj: any) => {
+  const out: any = {};
+  for (const k in obj) {
+    out[k.toLowerCase()] = obj[k];
+  }
+  return out;
+};
+
+// Helper to map DB lowercase back to JS camelCase (for compatibility with existing UI)
+const fromDb = (obj: any, template: any) => {
+  if (!obj) return obj;
+  const out: any = { ...obj };
+  // If the template has camelCase keys, map the lowercase DB keys back to them
+  for (const k in template) {
+    const lowerK = k.toLowerCase();
+    if (obj[lowerK] !== undefined && k !== lowerK) {
+      out[k] = obj[lowerK];
+    }
+  }
+  return out;
 };
 
 export const DBService = {
@@ -99,11 +122,21 @@ export const DBService = {
       const { data, error } = await client
         .from('agreements')
         .select('*')
-        .order('submittedAt', { ascending: false });
+        .order('submittedat', { ascending: false });
       
       if (error) throw error;
       
-      const agreements = data as AgreementData[];
+      // Map back to camelCase for the UI
+      const agreements = (data || []).map(a => fromDb(a, {
+        id: '', status: '', date: '', clientEmail: '', poBox: '', code: '',
+        clientSignature: '', officialSignature: '', officialName: '',
+        rejectionReason: '', resubmissionReason: '', clientName: '',
+        clientTitle: '', submittedAt: '', approvedAt: '', dboName: '',
+        premiseName: '', permitNo: '', location: '', county: '',
+        totalArrears: 0, totalArrearsWords: '', arrearsPeriod: '',
+        debitNoteNo: '', tel: '', arrearsBreakdown: null, installments: []
+      })) as AgreementData[];
+      
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(agreements));
       return agreements;
     } catch (error) {
@@ -144,14 +177,18 @@ export const DBService = {
 
     try {
       console.log("[DBService] Attempting Supabase upsert to 'agreements' table...", { id: agreement.id });
+      const dbAgreement = toDb(agreement);
       const { error } = await client
         .from('agreements')
-        .upsert(agreement);
+        .upsert(dbAgreement);
       
       if (error) {
         console.error("[DBService] Supabase upsert error:", error);
         if (error.code === '42P01') {
           throw new Error("Supabase Error: The 'agreements' table does not exist. Please run the SQL setup in the Admin Dashboard Settings.");
+        }
+        if (error.code === 'PGRST204') {
+          throw new Error(`Supabase Error: Column mismatch. Please ensure your 'agreements' table has all required columns (including clientemail, pobox, etc.) in lowercase. Error: ${error.message}`);
         }
         throw new Error(`Supabase Error: ${error.message} (Code: ${error.code}, Hint: ${error.hint || 'None'})`);
       }
@@ -191,9 +228,10 @@ export const DBService = {
 
     try {
       console.log("[DBService] Attempting Supabase update to 'agreements' table...", { id, updates });
+      const dbUpdates = toDb(updates);
       const { error } = await client
         .from('agreements')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', id);
       
       if (error) {
@@ -274,13 +312,18 @@ export const DBService = {
       const { data, error } = await client
         .from('debtors')
         .select('*')
-        .order('dboName', { ascending: true });
+        .order('dboname', { ascending: true });
       
       if (error) throw error;
       
       if (data && data.length > 0) {
-        localStorage.setItem('kdb_debtors_cache', JSON.stringify(data));
-        return data as DebtorRecord[];
+        const debtors = data.map(d => fromDb(d, {
+          id: '', dboName: '', premiseName: '', permitNo: '', location: '',
+          county: '', totalArrears: 0, totalArrearsWords: '', arrearsPeriod: '',
+          debitNoteNo: '', tel: '', arrearsBreakdown: null, installments: []
+        })) as DebtorRecord[];
+        localStorage.setItem('kdb_debtors_cache', JSON.stringify(debtors));
+        return debtors;
       }
       return [];
     } catch (error) {
@@ -311,9 +354,10 @@ export const DBService = {
     }
 
     try {
+      const dbDebtors = debtors.map(d => toDb(d));
       const { error } = await client
         .from('debtors')
-        .upsert(debtors);
+        .upsert(dbDebtors);
       
       if (error) throw error;
       localStorage.setItem('kdb_debtors_cache', JSON.stringify(debtors));
@@ -351,8 +395,9 @@ export const DBService = {
       if (error && error.code !== 'PGRST116') throw error;
       
       if (data) {
-        localStorage.setItem('kdb_staff_cache', JSON.stringify(data));
-        return data as StaffConfig;
+        const config = fromDb(data, { officialSignature: '', officialName: '', officialTitle: '' }) as StaffConfig;
+        localStorage.setItem('kdb_staff_cache', JSON.stringify(config));
+        return config;
       }
       return { officialSignature: '' };
     } catch (error) {
@@ -383,9 +428,10 @@ export const DBService = {
     }
 
     try {
+      const dbConfig = toDb(config);
       const { error } = await client
         .from('staff_config')
-        .upsert({ id: 1, ...config });
+        .upsert({ id: 1, ...dbConfig });
       
       if (error) throw error;
       localStorage.setItem('kdb_staff_cache', JSON.stringify(config));
