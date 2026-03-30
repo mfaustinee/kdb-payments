@@ -72,17 +72,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
       const config = await DBService.fetchConfig();
       console.log("[HealthCheck] Supabase config from server:", config);
       
-      const agreements = await DBService.getAgreements();
-      console.log(`[HealthCheck] Agreements count: ${agreements.length}`);
+      // Check both sources for configuration
+      const hasBuildUrl = !!import.meta.env.VITE_SUPABASE_URL;
+      const hasBuildKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const hasServerUrl = !!(config && config.VITE_SUPABASE_URL);
+      const hasServerKey = !!(config && config.VITE_SUPABASE_ANON_KEY);
       
-      const isConfigured = !!(config && config.VITE_SUPABASE_URL && config.VITE_SUPABASE_ANON_KEY);
+      const isConfigured = (hasBuildUrl && hasBuildKey) || (hasServerUrl && hasServerKey);
+      
+      console.log("[HealthCheck] Configuration status:", {
+        buildTime: { url: hasBuildUrl, key: hasBuildKey },
+        serverTime: { url: hasServerUrl, key: hasServerKey },
+        final: isConfigured
+      });
+
+      let tableStatus = { agreements: false, debtors: false, staff: false };
+      let agreementsCount = 0;
+
+      if (isConfigured) {
+        try {
+          const agreements = await DBService.getAgreements();
+          agreementsCount = agreements.length;
+          tableStatus.agreements = true;
+          console.log(`[HealthCheck] Agreements table accessible. Count: ${agreementsCount}`);
+        } catch (e) {
+          console.error("[HealthCheck] Agreements table check failed:", e);
+        }
+
+        try {
+          await DBService.getDebtors();
+          tableStatus.debtors = true;
+          console.log("[HealthCheck] Debtors table accessible");
+        } catch (e) {
+          console.error("[HealthCheck] Debtors table check failed:", e);
+        }
+
+        try {
+          await DBService.getStaffConfig();
+          tableStatus.staff = true;
+          console.log("[HealthCheck] Staff table accessible");
+        } catch (e) {
+          console.error("[HealthCheck] Staff table check failed:", e);
+        }
+      }
       
       setSystemHealth({ 
         status: healthData.status || 'ok', 
         writable: healthData.writable, 
         backendSupabase: healthData.supabaseConfigured,
         clientSupabase: isConfigured,
-        count: agreements.length,
+        tables: tableStatus,
+        count: agreementsCount,
         error: isConfigured ? null : "Missing Configuration: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set in environment"
       });
     } catch (e: any) {
@@ -916,6 +956,23 @@ CREATE POLICY "Allow anonymous access" ON staff_config FOR ALL USING (true) WITH
                         </div>
                       </div>
                     </div>
+
+                    {systemHealth.tables && (
+                      <div className="pt-4 border-t border-slate-800 grid grid-cols-3 gap-2">
+                        <div className="text-center">
+                          <div className={`text-[8px] font-black uppercase mb-1 ${systemHealth.tables.agreements ? 'text-emerald-500' : 'text-rose-500'}`}>Agreements</div>
+                          <div className={`w-1.5 h-1.5 rounded-full mx-auto ${systemHealth.tables.agreements ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`text-[8px] font-black uppercase mb-1 ${systemHealth.tables.debtors ? 'text-emerald-500' : 'text-rose-500'}`}>Debtors</div>
+                          <div className={`w-1.5 h-1.5 rounded-full mx-auto ${systemHealth.tables.debtors ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`text-[8px] font-black uppercase mb-1 ${systemHealth.tables.staff ? 'text-emerald-500' : 'text-rose-500'}`}>Staff</div>
+                          <div className={`w-1.5 h-1.5 rounded-full mx-auto ${systemHealth.tables.staff ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
             </div>

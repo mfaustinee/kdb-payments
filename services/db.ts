@@ -143,14 +143,20 @@ export const DBService = {
     }
 
     try {
+      console.log("[DBService] Attempting Supabase upsert to 'agreements' table...", { id: agreement.id });
       const { error } = await client
         .from('agreements')
         .upsert(agreement);
       
       if (error) {
         console.error("[DBService] Supabase upsert error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+        if (error.code === '42P01') {
+          throw new Error("Supabase Error: The 'agreements' table does not exist. Please run the SQL setup in the Admin Dashboard Settings.");
+        }
+        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code}, Hint: ${error.hint || 'None'})`);
       }
+      
+      console.log("[DBService] Agreement saved to Supabase successfully");
       
       // Update local cache
       const current = await this.getAgreements();
@@ -184,6 +190,7 @@ export const DBService = {
     }
 
     try {
+      console.log("[DBService] Attempting Supabase update to 'agreements' table...", { id, updates });
       const { error } = await client
         .from('agreements')
         .update(updates)
@@ -191,8 +198,10 @@ export const DBService = {
       
       if (error) {
         console.error("[DBService] Supabase update error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code}, Hint: ${error.hint || 'None'})`);
       }
+      
+      console.log("[DBService] Agreement updated in Supabase successfully");
       
       // Update local cache
       const current = await this.getAgreements();
