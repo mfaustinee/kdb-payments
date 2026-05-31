@@ -36,7 +36,11 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
       (d.tel === lookupSecret || d.debitNoteNo.toLowerCase() === lookupSecret.toLowerCase())
     );
     if (found) {
-      const existing = agreements.find(a => a.permitNo.toLowerCase() === found.permitNo.toLowerCase());
+      const existing = agreements.find(a => 
+        a.permitNo.toLowerCase() === found.permitNo.toLowerCase() &&
+        a.dboName.toLowerCase() === found.dboName.toLowerCase() &&
+        a.debitNoteNo.toLowerCase() === found.debitNoteNo.toLowerCase()
+      );
       if (existing) {
         if (existing.status === 'approved') {
           setVerifyError('You already have an approved agreement. Please contact KDB for further assistance.');
@@ -181,7 +185,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
                 <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border space-y-4">
                   <div className="flex justify-between items-center">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Operating DBO</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Operating Dairy Business Operator (DBO)</label>
                       <div className="text-lg font-black text-slate-800">{selectedDebtor?.dboName}</div>
                     </div>
                     <div className="text-right space-y-1">

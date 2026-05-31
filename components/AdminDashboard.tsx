@@ -318,7 +318,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">DBO Name</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Dairy Business Operator (DBO) Name</label>
                 <input value={newDebtor.dboName} onChange={e => setNewDebtor({...newDebtor, dboName: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" placeholder="e.g. Sunrise Dairy" />
               </div>
               <div className="space-y-1">
@@ -560,7 +560,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
 
                   <div className="pt-10 border-t flex flex-col md:flex-row md:items-end justify-between gap-10">
                     <div className="space-y-5">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DBO Signatory</h4>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dairy Business Operator (DBO) Signatory</h4>
                       <div className="flex items-center space-x-5 bg-slate-50/50 p-6 rounded-[32px] border border-slate-100">
                         <img src={selectedReview.clientSignature} className="h-20 w-32 object-contain bg-white rounded-2xl shadow-sm border border-slate-100 p-2" />
                         <div>
@@ -646,7 +646,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                 <div className="relative w-full max-w-md">
                     <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
-                        placeholder="Search ledger by DBO or Permit..." 
+                        placeholder="Search ledger by Dairy Business Operator (DBO) or Permit..." 
                         className="w-full pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium text-sm"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
@@ -664,7 +664,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 font-black text-slate-400 uppercase text-[9px] tracking-widest">
                             <tr>
-                                <th className="px-8 py-6">Operator Details</th>
+                                <th className="px-8 py-6">Dairy Business Operator (DBO) Details</th>
                                 <th className="px-8 py-6">Permit No</th>
                                 <th className="px-8 py-6 text-right">Balance Due</th>
                                 <th className="px-8 py-6 text-center">Actions</th>
@@ -801,7 +801,7 @@ CREATE TABLE IF NOT EXISTS debtors (
   id TEXT PRIMARY KEY,
   dboname TEXT NOT NULL,
   premisename TEXT,
-  permitno TEXT UNIQUE,
+  permitno TEXT,
   location TEXT,
   county TEXT,
   totalarrears NUMERIC,
@@ -812,6 +812,9 @@ CREATE TABLE IF NOT EXISTS debtors (
   arrearsbreakdown JSONB,
   installments JSONB
 );
+
+-- Note: To drop uniqueness constraint from an existing database, run:
+-- ALTER TABLE debtors DROP CONSTRAINT IF EXISTS debtors_permitno_key;
 
 CREATE TABLE IF NOT EXISTS staff_config (
   id INTEGER PRIMARY KEY DEFAULT 1,
@@ -863,7 +866,7 @@ CREATE TABLE IF NOT EXISTS debtors (
   id TEXT PRIMARY KEY,
   dboname TEXT NOT NULL,
   premisename TEXT,
-  permitno TEXT UNIQUE,
+  permitno TEXT,
   location TEXT,
   county TEXT,
   totalarrears NUMERIC,
@@ -874,6 +877,9 @@ CREATE TABLE IF NOT EXISTS debtors (
   arrearsbreakdown JSONB,
   installments JSONB
 );
+
+-- Note: To drop uniqueness constraint from an existing database, run:
+-- ALTER TABLE debtors DROP CONSTRAINT IF EXISTS debtors_permitno_key;
 
 CREATE TABLE IF NOT EXISTS staff_config (
   id INTEGER PRIMARY KEY DEFAULT 1,
