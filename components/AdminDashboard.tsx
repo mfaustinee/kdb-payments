@@ -1,33 +1,56 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig } from '../types';
+import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, ClosureNotificationData } from '../types';
 import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity } from 'lucide-react';
 import { PDFPreview } from './PDFPreview';
-import { downloadAgreementPDF } from '../services/pdf';
+import { ClosurePDFPreview } from './ClosurePDFPreview';
+import { downloadAgreementPDF, downloadClosurePDF } from '../services/pdf';
 import { numberToWords } from '../utils/numberToWords';
 
 interface AdminDashboardProps {
   agreements: AgreementData[];
+  closures: ClosureNotificationData[];
   debtors: DebtorRecord[];
   staffConfig: StaffConfig;
   isSyncing?: boolean;
   onRefresh?: () => void;
   onAction: (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => void;
   onDeleteAgreement?: (id: string) => void;
+  onClosureAction: (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => void;
+  onDeleteClosure?: (id: string) => void;
   onDebtorUpdate: (updated: DebtorRecord[]) => void;
   onStaffUpdate: (config: StaffConfig) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debtors, staffConfig, isSyncing, onRefresh, onAction, onDeleteAgreement, onDebtorUpdate, onStaffUpdate }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
+  agreements = [], 
+  closures = [], 
+  debtors, 
+  staffConfig, 
+  isSyncing, 
+  onRefresh, 
+  onAction, 
+  onDeleteAgreement, 
+  onClosureAction,
+  onDeleteClosure,
+  onDebtorUpdate, 
+  onStaffUpdate 
+}) => {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<'reviews' | 'debtors' | 'settings'>('reviews');
+  const [tab, setTab] = useState<'reviews' | 'closures' | 'debtors' | 'settings'>('reviews');
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
+  const [selectedClosureId, setSelectedClosureId] = useState<string | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isRejectingClosure, setIsRejectingClosure] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [isApprovingClosure, setIsApprovingClosure] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState('');
+  const [closureApprovalStatus, setClosureApprovalStatus] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [showClosurePreview, setShowClosurePreview] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [closureRejectionReason, setClosureRejectionReason] = useState('');
   const [adminName, setAdminName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingDebtor, setIsAddingDebtor] = useState(false);
@@ -182,6 +205,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
   };
   
   const selectedReview = agreements.find(a => a.id === selectedReviewId);
+  const selectedClosure = closures.find(c => c.id === selectedClosureId);
+
+  const handleApproveClosure = async () => {
+    if (!adminName) return alert("Please enter your name for authorization.");
+    if (!staffConfig.officialSignature) return alert("Please upload an official signature in Staff Setup first.");
+    
+    setIsApprovingClosure(true);
+    const steps = [
+      'Authenticating Credentials...',
+      'Verifying Premise Dossier...',
+      'Signing Decommissioning Notice...',
+      'Finalizing Cessation...'
+    ];
+
+    for (const s of steps) {
+      setClosureApprovalStatus(s);
+      await new Promise(r => setTimeout(r, 800));
+    }
+
+    if (!selectedClosure) return;
+    onClosureAction(selectedClosure.id, 'approve', { signature: staffConfig.officialSignature, name: adminName });
+    setIsApprovingClosure(false);
+    setAdminName('');
+  };
+
+  const handleRejectClosure = () => {
+    if (!closureRejectionReason) return alert("Please provide a reason for rejection.");
+    if (selectedClosure) {
+      onClosureAction(selectedClosure.id, 'reject', { signature: '', name: 'KDB Admin', reason: closureRejectionReason });
+    }
+    setIsRejectingClosure(false);
+    setClosureRejectionReason('');
+  };
 
   const handleSignatureUpload = (file: File | null) => {
     if (!file) return;
@@ -303,10 +359,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         {selectedReview && (
           <PDFPreview agreement={selectedReview} onClose={() => {}} isHidden />
         )}
+        {selectedClosure && (
+          <ClosurePDFPreview closure={selectedClosure} onClose={() => {}} isHidden />
+        )}
       </div>
 
       {showPreview && selectedReview && (
         <PDFPreview agreement={selectedReview} onClose={() => setShowPreview(false)} />
+      )}
+
+      {showClosurePreview && selectedClosure && (
+        <ClosurePDFPreview closure={selectedClosure} onClose={() => setShowClosurePreview(false)} />
       )}
 
       {isAddingDebtor && (
@@ -411,6 +474,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
         </div>
       )}
 
+      {isApprovingClosure && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-8">
+          <div className="bg-white p-10 rounded-[40px] shadow-2xl text-center max-w-sm w-full space-y-6 animate-in zoom-in-95">
+            <Loader2 className="w-16 h-16 text-red-600 animate-spin mx-auto" />
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">Cessation Processing</h3>
+              <p className="text-sm text-slate-500 mt-2 font-medium">{closureApprovalStatus}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
             <div className="flex items-center space-x-3">
@@ -436,6 +511,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
           </button>
           <button onClick={() => setTab('reviews')} className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center ${tab === 'reviews' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
             <FileCheck className="w-4 h-4 mr-2" /> Reviews
+          </button>
+          <button onClick={() => setTab('closures')} className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center ${tab === 'closures' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Briefcase className="w-4 h-4 mr-2" /> Cessations
+            {closures.filter(c => c.status === 'submitted').length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[9px] bg-rose-500 text-white rounded-full font-black animate-pulse">
+                {closures.filter(c => c.status === 'submitted').length}
+              </span>
+            )}
           </button>
           <button onClick={() => setTab('debtors')} className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center ${tab === 'debtors' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
             <Database className="w-4 h-4 mr-2" /> Ledger
@@ -573,12 +656,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
                     <div className="flex-grow max-w-sm w-full">
                       {selectedReview.status === 'submitted' ? (
                         <div className="space-y-4 bg-emerald-50 p-8 rounded-[40px] border border-emerald-100 shadow-xl">
-                          <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Countersign Agreement</h4>
-                          <input placeholder="Enter Authorized Name *" className="w-full px-6 py-4 border rounded-2xl text-xs bg-white font-bold outline-none shadow-sm" value={adminName} onChange={e => setAdminName(e.target.value)} />
-                          <div className="flex gap-3">
-                            <button onClick={() => setIsRejecting(true)} className="flex-1 py-4 text-rose-600 font-bold text-[10px] uppercase tracking-widest bg-white border border-rose-100 rounded-2xl hover:bg-rose-50 transition-all">Reject</button>
-                            <button onClick={handleApprove} className="flex-2 py-4 bg-emerald-600 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-lg hover:bg-emerald-700 transition-all">Sign & Approve</button>
-                          </div>
+                          <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
+                            {isRejecting ? 'Provide Rejection Reason' : 'Countersign Agreement'}
+                          </h4>
+                          {isRejecting ? (
+                            <div className="space-y-3">
+                              <textarea 
+                                placeholder="Enter reason for rejection or resubmission request..." 
+                                className="w-full px-4 py-3 border rounded-2xl text-xs bg-white font-bold outline-none shadow-sm h-24 resize-none"
+                                value={rejectionReason}
+                                onChange={e => setRejectionReason(e.target.value)}
+                              />
+                              <div className="flex gap-3">
+                                <button onClick={() => setIsRejecting(false)} className="flex-1 py-3 text-slate-500 font-bold text-[10px] uppercase tracking-widest bg-white border border-slate-200 rounded-2xl">Cancel</button>
+                                <button onClick={handleReject} className="flex-1 py-3 bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg hover:bg-rose-700">Submit Reject</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <input placeholder="Enter Authorized Name *" className="w-full px-6 py-4 border rounded-2xl text-xs bg-white font-bold outline-none shadow-sm" value={adminName} onChange={e => setAdminName(e.target.value)} />
+                              <div className="flex gap-3">
+                                <button onClick={() => setIsRejecting(true)} className="flex-1 py-4 text-rose-600 font-bold text-[10px] uppercase tracking-widest bg-white border border-rose-100 rounded-2xl hover:bg-rose-50 transition-all">Reject</button>
+                                <button onClick={handleApprove} className="flex-2 py-4 bg-emerald-600 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-lg hover:bg-emerald-700 transition-all">Sign & Approve</button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ) : selectedReview.status === 'resubmission_requested' ? (
                         <div className="space-y-6 bg-purple-50 p-8 rounded-[40px] border border-purple-100 shadow-xl">
@@ -634,6 +736,176 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ agreements, debt
               <div className="flex flex-col items-center justify-center h-[600px] text-slate-300 bg-white rounded-[40px] border-2 border-dashed border-slate-200">
                 <Mail className="w-20 h-20 opacity-10 mb-8" />
                 <p className="text-[10px] font-black tracking-[0.5em] uppercase text-center px-10">Inbox Empty. Waiting for operator submissions.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'closures' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 animate-in fade-in duration-300">
+          <div className="lg:col-span-4 space-y-4">
+            <div className="flex items-center justify-between mb-2 px-2">
+              <h3 className="font-black text-slate-400 text-[10px] uppercase tracking-[0.3em]">Cessation Inbox</h3>
+              <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-[9px] font-black">{closures?.length || 0} Total</span>
+            </div>
+            {(!closures || closures.length === 0) ? (
+              <div className="bg-white p-12 rounded-[32px] border-2 border-dashed border-slate-200 text-center text-slate-400 text-sm font-medium">No business cessation notices</div>
+            ) : (
+              closures.map(c => (
+                <div key={c.id} className="relative group">
+                  <button onClick={() => { setSelectedClosureId(c.id); setIsRejectingClosure(false); }} className={`w-full p-6 rounded-[32px] border text-left transition-all ${selectedClosureId === c.id ? 'border-red-600 bg-red-50/50 shadow-xl' : 'border-white bg-white hover:border-red-200 shadow-sm'}`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="font-bold text-slate-800 block truncate leading-tight w-[70%]">{c.dboName}</span>
+                      <div className={`px-2 py-0.5 text-[8px] font-black uppercase rounded-full ${c.status === 'submitted' ? 'bg-amber-100 text-amber-700 animate-pulse' : c.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {c.status}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                      <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" /> {c.county}</span>
+                      <span>•</span>
+                      <span>{new Date(c.submittedAt || '').toLocaleDateString()}</span>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onDeleteClosure?.(c.id); }}
+                    className="absolute top-4 right-4 p-2 bg-white text-rose-500 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-50 border border-rose-100 z-10"
+                    title="Delete Notice"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="lg:col-span-8">
+            {selectedClosure ? (
+              <div className="bg-white rounded-[40px] shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-right-4 duration-300">
+                <div className="p-10 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900">{selectedClosure.dboName}</h3>
+                    <div className="flex items-center space-x-3 mt-1 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                      <span>Permit: {selectedClosure.permitNo}</span>
+                      <span>|</span>
+                      <span>{selectedClosure.county} County</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowClosurePreview(true)} className="flex items-center text-slate-600 font-black bg-slate-50 px-5 py-3 rounded-2xl text-[10px] uppercase tracking-widest hover:bg-slate-100">
+                    <FileSearch className="w-4 h-4 mr-2" /> View Certificate
+                  </button>
+                </div>
+
+                <div className="p-10 space-y-12">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center"><Briefcase className="w-3 h-3 mr-2" /> Premise Profile</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-medium">Premise Name</span><span className="text-xs font-bold text-slate-700">{selectedClosure.premiseName}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-medium">Business / Permit Type</span><span className="text-xs font-bold text-slate-700">{selectedClosure.permitType}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-medium">Phone Number</span><span className="text-xs font-bold text-slate-700">{selectedClosure.tel}</span></div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center"><AlertCircle className="w-3 h-3 mr-2" /> Cessation Specifics</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-medium">Official Closure Date</span><span className="text-xs font-bold text-slate-700">{selectedClosure.closureDate}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-medium font-bold text-slate-700">Action Ordered</span><span className="text-xs font-black text-red-600 uppercase tracking-wider">{selectedClosure.permitStatusIntent}</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reason for Cessation</h4>
+                    <div className="p-6 bg-slate-50 border rounded-3xl text-sm text-slate-600 italic leading-relaxed">
+                      &quot;{selectedClosure.closureReason}&quot;
+                    </div>
+                  </div>
+
+                  {selectedClosure.status === 'rejected' && selectedClosure.rejectionReason && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Rejection Details</h4>
+                      <div className="p-6 bg-rose-50 border border-rose-100 rounded-3xl text-sm text-rose-700 italic font-medium leading-relaxed">
+                        &quot;{selectedClosure.rejectionReason}&quot;
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-10 border-t flex flex-col md:flex-row md:items-end justify-between gap-10">
+                    <div className="space-y-5">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operator Signatory</h4>
+                      <div className="flex items-center space-x-5 bg-slate-50/50 p-6 rounded-[32px] border border-slate-100">
+                        <img src={selectedClosure.clientSignature} className="h-20 w-32 object-contain bg-white rounded-2xl shadow-sm border border-slate-100 p-2" />
+                        <div>
+                          <div className="text-sm font-black text-slate-800">{selectedClosure.clientName}</div>
+                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">DBO Applicant</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex-grow max-w-sm w-full">
+                      {selectedClosure.status === 'submitted' ? (
+                        <div className="space-y-4 bg-red-50/60 p-8 rounded-[40px] border border-red-100 shadow-xl">
+                          <h4 className="text-[10px] font-black text-red-700 uppercase tracking-widest">
+                            {isRejectingClosure ? 'Provide Rejection Reason' : 'Countersign Cessation & Decommit'}
+                          </h4>
+                          {isRejectingClosure ? (
+                            <div className="space-y-3">
+                              <textarea 
+                                placeholder="Enter reason for rejecting this notification..." 
+                                className="w-full px-4 py-3 border rounded-2xl text-xs bg-white font-bold outline-none shadow-sm h-24 resize-none"
+                                value={closureRejectionReason}
+                                onChange={e => setClosureRejectionReason(e.target.value)}
+                              />
+                              <div className="flex gap-3">
+                                <button onClick={() => setIsRejectingClosure(false)} className="flex-1 py-3 text-slate-500 font-bold text-[10px] uppercase tracking-widest bg-white border border-slate-200 rounded-2xl">Cancel</button>
+                                <button onClick={handleRejectClosure} className="flex-1 py-3 bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg hover:bg-rose-700">Submit Reject</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <input placeholder="Enter Authorized Name *" className="w-full px-6 py-4 border rounded-2xl text-xs bg-white font-bold outline-none shadow-sm" value={adminName} onChange={e => setAdminName(e.target.value)} />
+                              <div className="flex gap-3">
+                                <button onClick={() => setIsRejectingClosure(true)} className="flex-1 py-4 text-rose-600 font-bold text-[10px] uppercase tracking-widest bg-white border border-rose-100 rounded-2xl hover:bg-rose-50 transition-all">Reject</button>
+                                <button onClick={handleApproveClosure} className="flex-2 py-4 bg-red-600 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-lg hover:bg-red-700 transition-all">Sign & Decommission</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {selectedClosure.status === 'approved' && (
+                            <div className="space-y-4">
+                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">KDB Authorized Execution</h4>
+                              <div className="flex items-center space-x-5 bg-emerald-50/50 p-6 rounded-[32px] border border-emerald-100">
+                                <img src={selectedClosure.officialSignature} className="h-20 w-32 object-contain" />
+                                <div>
+                                  <div className="text-sm font-black text-slate-800">{selectedClosure.officialName}</div>
+                                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest text-emerald-600">Deregistered & Filed</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {selectedClosure.status === 'approved' && (
+                            <button 
+                              onClick={() => downloadClosurePDF(selectedClosure, 'closure-certificate-hidden')}
+                              className="w-full py-4 bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-lg hover:bg-slate-800 transition-all flex items-center justify-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" /> Download Certificate
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[600px] text-slate-300 bg-white rounded-[40px] border-2 border-dashed border-slate-200">
+                <Briefcase className="w-20 h-20 opacity-10 mb-8" />
+                <p className="text-[10px] font-black tracking-[0.5em] uppercase text-center px-10">Cessation Inbox Empty. Waiting for notifications.</p>
               </div>
             )}
           </div>

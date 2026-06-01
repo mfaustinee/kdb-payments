@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
+const CLOSURES_FILE = path.join(DATA_DIR, "closures.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
 const LOG_FILE = path.join(DATA_DIR, "server.log");
@@ -297,6 +298,108 @@ async function startServer() {
     }
   });
 
+    logToFile("[Server] Registering closures routes...");
+    app.get("/api/closures", async (req, res) => {
+      try {
+        if (!fs.existsSync(CLOSURES_FILE)) {
+          return res.json([]);
+        }
+        const data = await fs.promises.readFile(CLOSURES_FILE, "utf-8");
+        try {
+          res.json(JSON.parse(data));
+        } catch (parseError) {
+          logToFile(`Error parsing closures JSON: ${parseError}`);
+          res.json([]);
+        }
+      } catch (error) {
+        logToFile(`Error reading closures: ${error}`);
+        res.status(500).json({ error: "Failed to read closures" });
+      }
+    });
+
+    app.post("/api/closures", async (req, res) => {
+      try {
+        logToFile(`Attempting to save closure: ${req.body?.id}`);
+        if (!req.body || !req.body.id) {
+          logToFile("Error: Missing closure ID in request body");
+          return res.status(400).json({ error: "Missing closure ID" });
+        }
+
+        let closures = [];
+        try {
+          if (fs.existsSync(CLOSURES_FILE)) {
+            const data = await fs.promises.readFile(CLOSURES_FILE, "utf-8");
+            closures = JSON.parse(data);
+          }
+        } catch (readError) {
+          logToFile(`Warning: Could not read closures file, starting fresh: ${readError}`);
+          closures = [];
+        }
+
+        const newClosure = req.body;
+        const index = closures.findIndex((c: any) => c.id === newClosure.id);
+        if (index !== -1) {
+          logToFile(`Updating existing closure: ${newClosure.id}`);
+          closures[index] = newClosure;
+        } else {
+          logToFile(`Adding new closure: ${newClosure.id}`);
+          closures.push(newClosure);
+        }
+
+        await fs.promises.writeFile(CLOSURES_FILE, JSON.stringify(closures, null, 2));
+        logToFile(`Successfully saved closure: ${newClosure.id}`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error saving closure: ${error.message}\nStack: ${error.stack}`);
+        res.status(500).json({ error: "Failed to save closure", details: error.message });
+      }
+    });
+
+    app.patch("/api/closures/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        logToFile(`Attempting to update closure: ${id}`);
+        
+        let closures = [];
+        try {
+          const data = await fs.promises.readFile(CLOSURES_FILE, "utf-8");
+          closures = JSON.parse(data);
+        } catch (readError) {
+          logToFile(`Error reading closures during update: ${readError}`);
+          return res.status(500).json({ error: "Failed to read closures" });
+        }
+
+        const index = closures.findIndex((c: any) => c.id === id);
+        if (index !== -1) {
+          closures[index] = { ...closures[index], ...req.body };
+          await fs.promises.writeFile(CLOSURES_FILE, JSON.stringify(closures, null, 2));
+          logToFile(`Successfully updated closure: ${id}`);
+          res.json({ success: true });
+        } else {
+          logToFile(`Error: Closure not found for update: ${id}`);
+          res.status(404).json({ error: "Not found" });
+        }
+      } catch (error: any) {
+        logToFile(`CRITICAL Error updating closure: ${error.message}`);
+        res.status(500).json({ error: "Failed to update closure", details: error.message });
+      }
+    });
+
+    app.delete("/api/closures/:id", async (req, res) => {
+      try {
+        const data = await fs.promises.readFile(CLOSURES_FILE, "utf-8");
+        const closures = JSON.parse(data);
+        const { id } = req.params;
+        const filtered = closures.filter((c: any) => c.id !== id);
+        await fs.promises.writeFile(CLOSURES_FILE, JSON.stringify(filtered, null, 2));
+        logToFile(`Deleted closure: ${id}`);
+        res.json({ success: true });
+      } catch (error) {
+        logToFile(`Error deleting closure ${req.params.id}: ${error}`);
+        res.status(500).json({ error: "Failed to delete closure" });
+      }
+    });
+
     logToFile("[Server] Registering debtors routes...");
     app.get("/api/debtors", async (req, res) => {
     try {
@@ -428,7 +531,7 @@ async function startServer() {
   }
 
   // Ensure initial files exist
-  [AGREEMENTS_FILE, DEBTORS_FILE].forEach(file => {
+  [AGREEMENTS_FILE, CLOSURES_FILE, DEBTORS_FILE].forEach(file => {
     if (!fs.existsSync(file)) {
       console.log(`[Server] Initializing file: ${file}`);
       fs.writeFileSync(file, JSON.stringify([], null, 2));

@@ -4,7 +4,9 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import { AgreementForm } from './components/AgreementForm.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { SuccessScreen } from './components/SuccessScreen.tsx';
-import { AgreementData, DebtorRecord, ArrearItem, StaffConfig } from './types.ts';
+import { PortalHub } from './components/PortalHub.tsx';
+import { ClosureForm } from './components/ClosureForm.tsx';
+import { AgreementData, DebtorRecord, ArrearItem, StaffConfig, ClosureNotificationData } from './types.ts';
 import { ShieldCheck, User, ClipboardList, Cloud, CloudOff, Loader2, LogOut, Lock } from 'lucide-react';
 import { DBService } from './services/db.ts';
 
@@ -12,6 +14,7 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [agreements, setAgreements] = useState<AgreementData[]>([]);
+  const [closures, setClosures] = useState<ClosureNotificationData[]>([]);
   const [debtors, setDebtors] = useState<DebtorRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -52,14 +55,18 @@ const App: React.FC = () => {
   const loadDatabase = async () => {
     setIsSyncing(true);
     try {
-      const [storedAgreements, storedDebtors, storedStaff] = await Promise.all([
+      const [storedAgreements, storedDebtors, storedStaff, storedClosures] = await Promise.all([
         DBService.getAgreements(),
         DBService.getDebtors(),
-        DBService.getStaffConfig()
+        DBService.getStaffConfig(),
+        DBService.getClosures()
       ]);
 
       const uniqueAgreements = Array.from(new Map(storedAgreements.map(a => [a.id, a])).values());
       setAgreements(uniqueAgreements);
+
+      const uniqueClosures = Array.from(new Map(storedClosures.map(c => [c.id, c])).values());
+      setClosures(uniqueClosures);
       
       // Check for direct link ID
       const urlParams = new URLSearchParams(window.location.search);
@@ -71,7 +78,10 @@ const App: React.FC = () => {
           navigate('/success');
         }
       }
-      setUnreadCount(uniqueAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      
+      const unreadAgreements = uniqueAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+      const unreadClosures = uniqueClosures.filter(c => c.status === 'submitted').length;
+      setUnreadCount(unreadAgreements + unreadClosures);
       setStaffConfig(storedStaff);
 
       if (storedDebtors.length > 0) {
@@ -117,13 +127,41 @@ const App: React.FC = () => {
       // Refresh local state
       const updated = await DBService.getAgreements();
       setAgreements(updated);
-      setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      
+      const updatedClosures = await DBService.getClosures();
+      setClosures(updatedClosures);
+
+      const unreadAgreements = updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+      const unreadClosures = updatedClosures.filter(c => c.status === 'submitted').length;
+      setUnreadCount(unreadAgreements + unreadClosures);
       
       setCurrentAgreement(submission);
       navigate('/success');
     } catch (error: any) {
       console.error("Submission failed:", error);
       alert("Submission failed. Please try again.");
+      throw error;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleClosureSubmit = async (data: ClosureNotificationData) => {
+    setIsSyncing(true);
+    try {
+      const submission = { ...data, submittedAt: new Date().toISOString() };
+      await DBService.saveClosure(submission);
+      
+      const updated = await DBService.getClosures();
+      setClosures(updated);
+
+      const updatedAgreements = await DBService.getAgreements();
+      const unreadAgreements = updatedAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+      const unreadClosures = updated.filter(c => c.status === 'submitted').length;
+      setUnreadCount(unreadAgreements + unreadClosures);
+    } catch (error: any) {
+      console.error("Closure submission failed:", error);
+      alert("Cessation notification submission failed. Please try again.");
       throw error;
     } finally {
       setIsSyncing(false);
@@ -139,9 +177,31 @@ const App: React.FC = () => {
     await DBService.updateAgreement(id, updates);
     
     const updated = await DBService.getAgreements();
-    
     setAgreements(updated);
-    setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+    
+    const updatedClosures = await DBService.getClosures();
+    
+    const unreadAgreements = updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+    const unreadClosures = updatedClosures.filter(c => c.status === 'submitted').length;
+    setUnreadCount(unreadAgreements + unreadClosures);
+    setIsSyncing(false);
+  };
+
+  const handleClosureAction = async (id: string, action: 'approve' | 'reject', adminData?: { signature: string; name: string; reason?: string }) => {
+    setIsSyncing(true);
+    const updates: Partial<ClosureNotificationData> = action === 'approve'
+      ? { status: 'approved', officialSignature: adminData?.signature, officialName: adminData?.name, approvedAt: new Date().toISOString() }
+      : { status: 'rejected', rejectionReason: adminData?.reason };
+
+    await DBService.updateClosure(id, updates);
+    
+    const updatedClosures = await DBService.getClosures();
+    setClosures(updatedClosures);
+
+    const updatedAgreements = await DBService.getAgreements();
+    const unreadAgreements = updatedAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+    const unreadClosures = updatedClosures.filter(c => c.status === 'submitted').length;
+    setUnreadCount(unreadAgreements + unreadClosures);
     setIsSyncing(false);
   };
 
@@ -153,9 +213,33 @@ const App: React.FC = () => {
       await DBService.deleteAgreement(id);
       const updated = await DBService.getAgreements();
       setAgreements(updated);
-      setUnreadCount(updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length);
+      
+      const updatedClosures = await DBService.getClosures();
+      const unreadAgreements = updated.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+      const unreadClosures = updatedClosures.filter(c => c.status === 'submitted').length;
+      setUnreadCount(unreadAgreements + unreadClosures);
     } catch (error) {
       console.error("Deletion failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteClosure = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this cessation notice? This action cannot be undone.")) return;
+    
+    setIsSyncing(true);
+    try {
+      await DBService.deleteClosure(id);
+      const updatedClosures = await DBService.getClosures();
+      setClosures(updatedClosures);
+
+      const updatedAgreements = await DBService.getAgreements();
+      const unreadAgreements = updatedAgreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length;
+      const unreadClosures = updatedClosures.filter(c => c.status === 'submitted').length;
+      setUnreadCount(unreadAgreements + unreadClosures);
+    } catch (error) {
+      console.error("Cessation deletion failed:", error);
     } finally {
       setIsSyncing(false);
     }
@@ -200,7 +284,7 @@ const App: React.FC = () => {
             <nav className="flex space-x-1.5">
               <button 
                 onClick={() => navigate('/')}
-                className={`flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all ${location.pathname === '/' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+                className={`flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all ${['/', '/payment-agreement', '/closure-notice'].includes(location.pathname) ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 <User className="w-4 h-4 mr-2" />
                 Portal
@@ -237,17 +321,29 @@ const App: React.FC = () => {
 
       <main className="flex-grow">
         <Routes>
-          <Route path="/" element={<AgreementForm agreements={agreements} debtors={debtors} onSubmit={handleClientSubmit} />} />
+          <Route path="/" element={
+            <PortalHub 
+              onSelectPaymentPortal={() => navigate('/payment-agreement')} 
+              onSelectClosurePortal={() => navigate('/closure-notice')}
+              unreadAgreementsCount={agreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length}
+              unreadClosuresCount={closures.filter(c => c.status === 'submitted').length}
+            />
+          } />
+          <Route path="/payment-agreement" element={<AgreementForm agreements={agreements} debtors={debtors} onSubmit={handleClientSubmit} />} />
+          <Route path="/closure-notice" element={<ClosureForm onSubmit={handleClosureSubmit} onBack={() => navigate('/')} />} />
           <Route path="/admin" element={
             isAdminAuthenticated ? (
               <AdminDashboard 
                 agreements={agreements} 
+                closures={closures}
                 debtors={debtors}
                 staffConfig={staffConfig}
                 isSyncing={isSyncing}
                 onRefresh={loadDatabase}
                 onAction={handleAdminAction} 
                 onDeleteAgreement={handleDeleteAgreement}
+                onClosureAction={handleClosureAction}
+                onDeleteClosure={handleDeleteClosure}
                 onDebtorUpdate={handleDebtorUpdate}
                 onStaffUpdate={handleStaffUpdate}
               />

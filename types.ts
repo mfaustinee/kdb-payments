@@ -49,6 +49,30 @@ export interface AgreementData extends DebtorRecord {
   approvedAt?: string;
 }
 
+export interface ClosureNotificationData {
+  id: string;
+  status: 'submitted' | 'approved' | 'rejected';
+  submittedAt: string;
+  approvedAt?: string;
+  dboName: string;
+  permitNo: string;
+  premiseName: string;
+  permitType: string;
+  county: string;
+  subCounty: string;
+  location: string;
+  tel: string;
+  closureDate: string;
+  closureReason: string;
+  permitStatusIntent: string;
+  declarationAgreed: boolean;
+  clientSignature: string;
+  clientName: string;
+  officialSignature?: string;
+  officialName?: string;
+  rejectionReason?: string;
+}
+
 // Helper to resolve environment variables in various browser environments
 export const getEnv = (key: string, fallback: string = ''): string => {
   return import.meta.env[key] || fallback;
