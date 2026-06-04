@@ -139,7 +139,7 @@ const App: React.FC = () => {
       navigate('/success');
     } catch (error: any) {
       console.error("Submission failed:", error);
-      alert("Submission failed. Please try again.");
+      alert(`Submission failed: ${error.message || 'Please try again.'}`);
       throw error;
     } finally {
       setIsSyncing(false);
@@ -161,7 +161,7 @@ const App: React.FC = () => {
       setUnreadCount(unreadAgreements + unreadClosures);
     } catch (error: any) {
       console.error("Closure submission failed:", error);
-      alert("Cessation notification submission failed. Please try again.");
+      alert(`Cessation notification submission failed: ${error.message || 'Please try again.'}`);
       throw error;
     } finally {
       setIsSyncing(false);

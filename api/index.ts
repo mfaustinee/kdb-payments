@@ -83,9 +83,20 @@ async function startServer() {
     app.use(express.urlencoded({ limit: '50mb', extended: true }));
     logToFile("[Server] URLencoded middleware added.");
 
-    // Request Logger
+    // Request Logger - log API and page requests, excluding individual static bundle assets to keep logs clean
     app.use((req, res, next) => {
-      logToFile(`[Request] ${req.method} ${req.url}`);
+      const isStaticSubresource = 
+        req.url.endsWith(".tsx") || 
+        req.url.endsWith(".ts") || 
+        req.url.endsWith(".css") || 
+        req.url.endsWith(".js") || 
+        req.url.includes("@vite") || 
+        req.url.includes("@react") || 
+        req.url.includes("node_modules");
+
+      if (!isStaticSubresource) {
+        logToFile(`[Request] ${req.method} ${req.url}`);
+      }
       next();
     });
 

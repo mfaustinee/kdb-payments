@@ -101,25 +101,28 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
         </div>
 
         {/* RIGHT SIDE: KDB Received by Sign-off */}
-        <div className="space-y-4 font-sans text-left relative bg-slate-50/40 p-6 rounded-2xl border border-slate-100 min-h-[170px]">
+        <div className="space-y-4 font-sans text-left relative bg-slate-50/40 p-6 rounded-2xl border border-slate-100 min-h-[200px] overflow-visible">
           
           {/* Dynamic Stamped Badging visual (Enlarged twice as big) */}
           {closure.status === 'approved' && (
             <div 
               style={{ 
-                fontFamily: 'Impact, sans-serif',
-                borderWidth: '8px',
-                borderStyle: 'double',
-                borderColor: '#10b981',
-                color: '#10b981',
-                borderRadius: '8px',
-                transform: 'rotate(-4deg)',
+                fontFamily: '"Arial Black", Arial, sans-serif',
+                borderWidth: '10px',
+                borderStyle: 'solid',
+                borderColor: '#ef4444', // High-impact red is highly visible in print/PDF
+                color: '#ef4444',
+                borderRadius: '12px',
+                transform: 'rotate(-6deg)',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-                padding: '12px 24px',
+                boxShadow: '0 10px 20px rgba(0,0,0,0.12)',
+                padding: '20px 40px',
                 display: 'inline-block',
+                fontWeight: 'bold',
+                letterSpacing: '0.15em',
+                lineHeight: 1,
               }}
-              className="absolute right-6 top-6 uppercase tracking-widest text-3xl font-black select-none z-10"
+              className="absolute right-4 top-4 uppercase text-4xl font-extrabold select-none z-50 animate-pulse"
             >
               RECEIVED
             </div>
@@ -129,16 +132,7 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
             For Kenya Dairy Board:
           </p>
           
-          <div className="space-y-2 text-xs">
-            <p className="pt-1">
-              <span className="font-semibold text-slate-500 block text-[9px] uppercase tracking-wider">Received Name:</span>{' '}
-              <span className="font-bold text-slate-800 text-sm">{closure.officialName || '______________________'}</span>
-            </p>
-            <p>
-              <span className="font-semibold text-slate-500 block text-[9px] uppercase tracking-wider">Official Title:</span>{' '}
-              <span className="font-bold text-slate-800 text-sm">{closure.officialTitle || '______________________'}</span>
-            </p>
-            
+          <div className="space-y-3">
             <div className="h-16 flex items-center py-1">
               {closure.officialSignature ? (
                 <img src={closure.officialSignature} className="max-h-full object-contain" alt="KDB Official Signature" crossOrigin="anonymous" />
@@ -149,10 +143,16 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
               )}
             </div>
 
+            <div>
+              <p className="font-extrabold text-slate-900 text-[11pt]">{closure.officialName || '______________________'}</p>
+              <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                {closure.officialTitle || 'Authorized KDB Official'}
+              </p>
+            </div>
+
             {closure.approvedAt && (
-              <p>
-                <span className="font-semibold text-slate-500 block text-[9px] uppercase tracking-wider">Received Date:</span>{' '}
-                <span className="font-bold text-slate-800 text-xs">{new Date(closure.approvedAt).toLocaleDateString('en-GB')}</span>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest pt-1">
+                Receipt Date: {new Date(closure.approvedAt).toLocaleDateString('en-GB')}
               </p>
             )}
           </div>

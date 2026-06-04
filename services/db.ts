@@ -124,7 +124,10 @@ export const DBService = {
         .select('*')
         .order('submittedat', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.warn("[DBService] Supabase getAgreements failed, falling back to local API. Error:", error);
+        throw error;
+      }
       
       // Map back to camelCase for the UI
       const agreements = (data || []).map(a => fromDb(a, {
@@ -140,30 +143,46 @@ export const DBService = {
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(agreements));
       return agreements;
     } catch (error) {
-      console.error("[DBService] getAgreements error:", error);
+      console.warn("[DBService] Supabase getAgreements exception, trying local API fallback. Error:", error);
+      try {
+        const response = await fetch('/api/agreements');
+        if (response.ok) {
+          const data = await response.json();
+          localStorage.setItem('kdb_agreements_cache', JSON.stringify(data));
+          return data;
+        }
+      } catch (localErr) {
+        console.error("[DBService] Local API fallback error during getAgreements:", localErr);
+      }
       const local = localStorage.getItem('kdb_agreements_cache');
       return local ? JSON.parse(local) : [];
     }
   },
 
   async saveAgreement(agreement: AgreementData): Promise<void> {
+    const saveLocal = async () => {
+      console.log("[DBService] Saving agreement to local API...");
+      const response = await fetch('/api/agreements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agreement)
+      });
+      if (response.ok) {
+        // Update local cache
+        const current = await this.getAgreements();
+        localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
+        return;
+      }
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to save to local API");
+    };
+
     const client = await getSupabase();
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
-        const response = await fetch('/api/agreements', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(agreement)
-        });
-        if (response.ok) {
-          // Update local cache
-          const current = await this.getAgreements();
-          localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
-          return;
-        }
-        const errData = await response.json();
-        throw new Error(errData.error || "Failed to save to local API");
+        await saveLocal();
+        return;
       } catch (e: any) {
         console.error("[DBService] Local API save error:", e);
         const missing = [];
@@ -183,43 +202,48 @@ export const DBService = {
         .upsert(dbAgreement);
       
       if (error) {
-        console.error("[DBService] Supabase upsert error:", error);
-        if (error.code === '42P01') {
-          throw new Error("Supabase Error: The 'agreements' table does not exist. Please run the SQL setup in the Admin Dashboard Settings.");
-        }
-        if (error.code === 'PGRST204') {
-          throw new Error(`Supabase Error: Column mismatch. Please ensure your 'agreements' table has all required columns (including clientemail, pobox, etc.) in lowercase. Error: ${error.message}`);
-        }
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code}, Hint: ${error.hint || 'None'})`);
+        console.warn("[DBService] Supabase agreement upsert failed, falling back to local API. Error details:", error);
+        await saveLocal();
+        return;
       }
       
       console.log("[DBService] Agreement saved to Supabase successfully");
-      
-      // Update local cache
       const current = await this.getAgreements();
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
     } catch (error: any) {
-      console.error("[DBService] saveAgreement error:", error);
-      throw error;
+      console.warn("[DBService] Supabase saveAgreement exception, falling back to local API. Error:", error);
+      try {
+        await saveLocal();
+      } catch (localErr: any) {
+        console.error("[DBService] Both Supabase and Local API failed for saveAgreement:", localErr);
+        throw new Error(`Submission failed. Supabase Error: ${error.message}. Local API Error: ${localErr.message}`);
+      }
     }
   },
 
   async updateAgreement(id: string, updates: Partial<AgreementData>): Promise<void> {
+    const updateLocal = async () => {
+      console.log("[DBService] Updating agreement via local API...");
+      const response = await fetch(`/api/agreements/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (response.ok) {
+        const current = await this.getAgreements();
+        localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
+        return;
+      }
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to update via local API");
+    };
+
     const client = await getSupabase();
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
-        const response = await fetch(`/api/agreements/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates)
-        });
-        if (response.ok) {
-          const current = await this.getAgreements();
-          localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
-          return;
-        }
-        throw new Error("Failed to update via local API");
+        await updateLocal();
+        return;
       } catch (e: any) {
         console.error("[DBService] Local API update error:", e);
         throw new Error(`Update failed: ${e.message}`);
@@ -235,35 +259,45 @@ export const DBService = {
         .eq('id', id);
       
       if (error) {
-        console.error("[DBService] Supabase update error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code}, Hint: ${error.hint || 'None'})`);
+        console.warn("[DBService] Supabase updateAgreement failed, falling back to local API. Error details:", error);
+        await updateLocal();
+        return;
       }
       
       console.log("[DBService] Agreement updated in Supabase successfully");
-      
-      // Update local cache
       const current = await this.getAgreements();
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
     } catch (error: any) {
-      console.error("[DBService] updateAgreement error:", error);
-      throw error;
+      console.warn("[DBService] Supabase updateAgreement exception, falling back to local API. Error:", error);
+      try {
+        await updateLocal();
+      } catch (localErr: any) {
+        console.error("[DBService] Both Supabase and Local API failed for updateAgreement:", localErr);
+        throw new Error(`Update failed. Supabase Error: ${error.message}. Local API Error: ${localErr.message}`);
+      }
     }
   },
 
   async deleteAgreement(id: string): Promise<void> {
+    const deleteLocal = async () => {
+      console.log("[DBService] Deleting agreement via local API...");
+      const response = await fetch(`/api/agreements/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        const current = await this.getAgreements();
+        localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
+        return;
+      }
+      throw new Error("Failed to delete via local API");
+    };
+
     const client = await getSupabase();
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API");
       try {
-        const response = await fetch(`/api/agreements/${id}`, {
-          method: 'DELETE'
-        });
-        if (response.ok) {
-          const current = await this.getAgreements();
-          localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
-          return;
-        }
-        throw new Error("Failed to delete via local API");
+        await deleteLocal();
+        return;
       } catch (e: any) {
         console.error("[DBService] Local API delete error:", e);
         throw new Error(`Delete failed: ${e.message}`);
@@ -277,36 +311,88 @@ export const DBService = {
         .eq('id', id);
       
       if (error) {
-        console.error("[DBService] Supabase delete error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+        console.warn("[DBService] Supabase deleteAgreement failed, falling back to local API. Error details:", error);
+        await deleteLocal();
+        return;
       }
       
       // Update local cache
       const current = await this.getAgreements();
       localStorage.setItem('kdb_agreements_cache', JSON.stringify(current));
     } catch (error: any) {
-      console.error("[DBService] deleteAgreement error:", error);
-      throw error;
+      console.warn("[DBService] Supabase deleteAgreement exception, falling back to local API. Error:", error);
+      try {
+        await deleteLocal();
+      } catch (localErr: any) {
+        console.error("[DBService] Both Supabase and Local API failed for deleteAgreement:", localErr);
+        throw error;
+      }
     }
   },
 
   async getClosures(): Promise<ClosureNotificationData[]> {
     const client = await getSupabase();
+    
+    // Helper to decode clientTitle out of clientName dynamically
+    // and officialTitle / officialComments out of officialName dynamically
+    const decodeClosures = (list: any[]) => {
+      return list.map(c => {
+        let name = c.clientName || '';
+        let title = c.clientTitle || '';
+        if (name.includes(' |Title:')) {
+          const parts = name.split(' |Title:');
+          name = parts[0];
+          title = parts[1];
+        }
+
+        let offName = c.officialName || '';
+        let offTitle = c.officialTitle || '';
+        let offComments = c.officialComments || '';
+        
+        if (offName.includes(' |Title:')) {
+          const partsTitle = offName.split(' |Title:');
+          offName = partsTitle[0];
+          const remaining = partsTitle[1];
+          if (remaining.includes(' |Comments:')) {
+            const partsComments = remaining.split(' |Comments:');
+            offTitle = partsComments[0];
+            offComments = partsComments[1];
+          } else {
+            offTitle = remaining;
+          }
+        } else if (offName.includes(' |Comments:')) {
+          const partsComments = offName.split(' |Comments:');
+          offName = partsComments[0];
+          offComments = partsComments[1];
+        }
+
+        return {
+          ...c,
+          clientName: name,
+          clientTitle: title,
+          officialName: offName,
+          officialTitle: offTitle,
+          officialComments: offComments
+        };
+      });
+    };
+
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API for closures");
       try {
         const response = await fetch('/api/closures');
         if (response.ok) {
           const data = await response.json();
-          localStorage.setItem('kdb_closures_cache', JSON.stringify(data));
-          return data;
+          const decoded = decodeClosures(data);
+          localStorage.setItem('kdb_closures_cache', JSON.stringify(decoded));
+          return decoded;
         }
       } catch (e) {
         console.error("[DBService] Local API error:", e);
       }
       
       const local = localStorage.getItem('kdb_closures_cache');
-      return local ? JSON.parse(local) : [];
+      return local ? decodeClosures(JSON.parse(local)) : [];
     }
 
     try {
@@ -315,9 +401,12 @@ export const DBService = {
         .select('*')
         .order('submittedat', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.warn("[DBService] Supabase getClosures failed, falling back to local API. Error details:", error);
+        throw error;
+      }
       
-      const closures = (data || []).map(c => fromDb(c, {
+      const closures = (data || []).map(b => fromDb(b, {
         id: '', status: '', submittedAt: '', approvedAt: '', dboName: '',
         permitNo: '', premiseName: '', permitType: '', county: '',
         subCounty: '', location: '', tel: '', closureDate: '',
@@ -326,32 +415,55 @@ export const DBService = {
         officialName: '', officialTitle: '', officialComments: '', rejectionReason: ''
       })) as ClosureNotificationData[];
       
-      localStorage.setItem('kdb_closures_cache', JSON.stringify(closures));
-      return closures;
+      const decoded = decodeClosures(closures);
+      localStorage.setItem('kdb_closures_cache', JSON.stringify(decoded));
+      return decoded;
     } catch (error) {
-      console.error("[DBService] getClosures error:", error);
+      console.warn("[DBService] Supabase getClosures exception, trying local API. Error:", error);
+      try {
+        const response = await fetch('/api/closures');
+        if (response.ok) {
+          const data = await response.json();
+          const decoded = decodeClosures(data);
+          localStorage.setItem('kdb_closures_cache', JSON.stringify(decoded));
+          return decoded;
+        }
+      } catch (localErr) {
+        console.error("[DBService] Local API fallback error during getClosures:", localErr);
+      }
       const local = localStorage.getItem('kdb_closures_cache');
-      return local ? JSON.parse(local) : [];
+      return local ? decodeClosures(JSON.parse(local)) : [];
     }
   },
 
   async saveClosure(closure: ClosureNotificationData): Promise<void> {
+    const formattedClosure = {
+      ...closure,
+      clientName: closure.clientTitle ? `${closure.clientName} |Title:${closure.clientTitle}` : closure.clientName
+    };
+
+    const saveLocal = async () => {
+      console.log("[DBService] Saving closure to local API...");
+      const response = await fetch('/api/closures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formattedClosure)
+      });
+      if (response.ok) {
+        const current = await this.getClosures();
+        localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
+        return;
+      }
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to save to local API");
+    };
+
     const client = await getSupabase();
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API for save closure");
       try {
-        const response = await fetch('/api/closures', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(closure)
-        });
-        if (response.ok) {
-          const current = await this.getClosures();
-          localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
-          return;
-        }
-        const errData = await response.json();
-        throw new Error(errData.error || "Failed to save to local API");
+        await saveLocal();
+        return;
       } catch (e: any) {
         console.error("[DBService] Local API save error:", e);
         throw e;
@@ -360,40 +472,74 @@ export const DBService = {
 
     try {
       console.log("[DBService] Attempting Supabase upsert to 'closures' table...", { id: closure.id });
-      const dbClosure = toDb(closure);
+      const dbClosure = toDb(formattedClosure);
+      // Remove unneeded column properties that don't exist in Supabase to prevent Postgrest 42703 error
+      delete dbClosure.clienttitle;
+      delete dbClosure.officialtitle;
+      delete dbClosure.officialcomments;
+
       const { error } = await client
         .from('closures')
         .upsert(dbClosure);
       
       if (error) {
-        console.error("[DBService] Supabase upsert error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+        console.warn("[DBService] Supabase upsert failed, falling back to local API. Error details:", error);
+        await saveLocal();
+        return;
       }
       
       const current = await this.getClosures();
       localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
     } catch (error: any) {
-      console.error("[DBService] saveClosure error:", error);
-      throw error;
+      console.warn("[DBService] Supabase saveClosure exception, falling back to local API. Error:", error);
+      try {
+        await saveLocal();
+      } catch (localErr: any) {
+        console.error("[DBService] Both Supabase and Local API failed for saveClosure:", localErr);
+        throw new Error(`Submission failed. Supabase Error: ${error.message}. Local API Error: ${localErr.message}`);
+      }
     }
   },
 
   async updateClosure(id: string, updates: Partial<ClosureNotificationData>): Promise<void> {
+    const updatesCopy = { ...updates };
+    if (updatesCopy.clientName && updatesCopy.clientTitle) {
+      updatesCopy.clientName = `${updatesCopy.clientName} |Title:${updatesCopy.clientTitle}`;
+    }
+
+    if (updatesCopy.officialName) {
+      let name = updatesCopy.officialName;
+      if (updatesCopy.officialTitle) {
+        name = `${name} |Title:${updatesCopy.officialTitle}`;
+      }
+      if (updatesCopy.officialComments) {
+        name = `${name} |Comments:${updatesCopy.officialComments}`;
+      }
+      updatesCopy.officialName = name;
+    }
+
+    const updateLocal = async () => {
+      console.log("[DBService] Updating closure via local API...");
+      const response = await fetch(`/api/closures/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatesCopy)
+      });
+      if (response.ok) {
+        const current = await this.getClosures();
+        localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
+        return;
+      }
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to update via local API");
+    };
+
     const client = await getSupabase();
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API for update closure");
       try {
-        const response = await fetch(`/api/closures/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates)
-        });
-        if (response.ok) {
-          const current = await this.getClosures();
-          localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
-          return;
-        }
-        throw new Error("Failed to update via local API");
+        await updateLocal();
+        return;
       } catch (e: any) {
         console.error("[DBService] Local API update error:", e);
         throw e;
@@ -401,40 +547,57 @@ export const DBService = {
     }
 
     try {
-      console.log("[DBService] Attempting Supabase update to 'closures' table...", { id, updates });
-      const dbUpdates = toDb(updates);
+      console.log("[DBService] Attempting Supabase update to 'closures' table...", { id, updates: updatesCopy });
+      const dbUpdates = toDb(updatesCopy);
+      // Remove untyped column properties that don't exist in Supabase to prevent Postgrest 42703 error
+      delete dbUpdates.clienttitle;
+      delete dbUpdates.officialtitle;
+      delete dbUpdates.officialcomments;
+
       const { error } = await client
         .from('closures')
         .update(dbUpdates)
         .eq('id', id);
       
       if (error) {
-        console.error("[DBService] Supabase update error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+        console.warn("[DBService] Supabase updateClosure failed, falling back to local API. Error details:", error);
+        await updateLocal();
+        return;
       }
       
       const current = await this.getClosures();
       localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
     } catch (error: any) {
-      console.error("[DBService] updateClosure error:", error);
-      throw error;
+      console.warn("[DBService] Supabase updateClosure exception, falling back to local API. Error:", error);
+      try {
+        await updateLocal();
+      } catch (localErr: any) {
+        console.error("[DBService] Both Supabase and Local API failed for updateClosure:", localErr);
+        throw new Error(`Update failed. Supabase Error: ${error.message}. Local API Error: ${localErr.message}`);
+      }
     }
   },
 
   async deleteClosure(id: string): Promise<void> {
+    const deleteLocal = async () => {
+      console.log("[DBService] Deleting closure via local API...");
+      const response = await fetch(`/api/closures/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        const current = await this.getClosures();
+        localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
+        return;
+      }
+      throw new Error("Failed to delete via local API");
+    };
+
     const client = await getSupabase();
     if (!client) {
       console.warn("[DBService] Supabase not initialized, trying local API for delete closure");
       try {
-        const response = await fetch(`/api/closures/${id}`, {
-          method: 'DELETE'
-        });
-        if (response.ok) {
-          const current = await this.getClosures();
-          localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
-          return;
-        }
-        throw new Error("Failed to delete via local API");
+        await deleteLocal();
+        return;
       } catch (e: any) {
         console.error("[DBService] Local API delete error:", e);
         throw e;
@@ -448,15 +611,21 @@ export const DBService = {
         .eq('id', id);
       
       if (error) {
-        console.error("[DBService] Supabase delete error:", error);
-        throw new Error(`Supabase Error: ${error.message} (Code: ${error.code})`);
+        console.warn("[DBService] Supabase deleteClosure failed, falling back to local API. Error details:", error);
+        await deleteLocal();
+        return;
       }
       
       const current = await this.getClosures();
       localStorage.setItem('kdb_closures_cache', JSON.stringify(current));
     } catch (error: any) {
-      console.error("[DBService] deleteClosure error:", error);
-      throw error;
+      console.warn("[DBService] Supabase deleteClosure exception, falling back to local API. Error:", error);
+      try {
+        await deleteLocal();
+      } catch (localErr: any) {
+        console.error("[DBService] Both Supabase and Local API failed for deleteClosure:", localErr);
+        throw error;
+      }
     }
   },
 
