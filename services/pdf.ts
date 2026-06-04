@@ -6,15 +6,17 @@ const sanitizeOklch = () => {
   try {
     const styleElements = document.querySelectorAll('style');
     styleElements.forEach((styleEl) => {
-      if (styleEl.textContent && styleEl.textContent.includes('oklch')) {
+      if (styleEl.textContent && (styleEl.textContent.includes('oklch') || styleEl.textContent.includes('oklab'))) {
         stylesBackup.push({ element: styleEl, text: styleEl.textContent });
-        // Replace oklch(...) with a standard color
-        const sanitized = styleEl.textContent.replace(/oklch\([^)]+\)/g, 'rgb(15, 23, 42)');
+        // Replace oklch(...) and oklab(...) with a standard color
+        const sanitized = styleEl.textContent
+          .replace(/oklch\([^)]+\)/g, 'rgb(15, 23, 42)')
+          .replace(/oklab\([^)]+\)/g, 'rgb(15, 23, 42)');
         styleEl.textContent = sanitized;
       }
     });
   } catch (e) {
-    console.warn("Failed to sanitize oklch styles:", e);
+    console.warn("Failed to sanitize oklch/oklab styles:", e);
   }
 
   return () => {
@@ -22,7 +24,7 @@ const sanitizeOklch = () => {
       try {
         element.textContent = text;
       } catch (e) {
-        console.warn("Failed to restore oklch style:", e);
+        console.warn("Failed to restore styles:", e);
       }
     });
   };
