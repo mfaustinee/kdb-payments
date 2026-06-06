@@ -23,7 +23,7 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
 
   return (
     <div 
-      className="px-12 py-12 leading-[1.6] text-[11pt] text-left w-[1024px] box-border relative" 
+      className="px-12 py-10 leading-[1.5] text-[10.5pt] text-left w-[1024px] box-border relative" 
       id={id} 
       style={{ 
         fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif', 
@@ -34,41 +34,66 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
       }}
     >
       {/* Sender Address Info */}
-      <div className="flex justify-between items-start mb-8">
-        <div className="space-y-1 font-sans">
-          <div className="font-extrabold text-lg text-slate-900">{closure.clientName}</div>
+      <div className="mb-4">
+        <div className="space-y-0.5 font-sans">
+          <div className="font-black text-lg text-slate-900">{closure.clientName}</div>
           <div className="font-bold text-slate-700">{closure.premiseName}</div>
-          <div className="text-slate-500 text-sm">Tel: {closure.tel}</div>
-        </div>
-        <div className="text-right font-sans">
-          <div className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">Notification Reference</div>
-          <div className="text-xs font-mono font-bold text-slate-700">{closure.id.substring(0, 8).toUpperCase()}</div>
+          <div className="text-slate-500 text-xs">Tel: {closure.tel}</div>
         </div>
       </div>
 
-      {/* Recipient Address Info */}
-      <div className="space-y-1 text-left mb-8 font-sans" style={{ color: '#0f172a' }}>
-        <p className="font-extrabold text-slate-900">The Compliance Officer</p>
-        <p className="font-bold">Kenya Dairy Board</p>
-        <p className="text-slate-700">P.O Box 30406-00100</p>
-        <p className="font-extrabold text-slate-800">Nairobi.</p>
-        <div className="pt-3 font-sans">
-          <p className="font-bold text-slate-600 text-[10pt]">Cc. KDB-Kericho</p>
-          <p className="text-slate-500 text-[9.5pt]">P.O Box 159-20200</p>
-          <p className="font-bold text-slate-600 text-[9.5pt]">Kericho.</p>
+      {/* Recipient Address Info & Repositioned Stamp */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="space-y-0.5 text-left font-sans" style={{ color: '#0f172a' }}>
+          <p className="font-extrabold text-slate-900 text-[11pt] leading-tight">The Compliance Officer</p>
+          <p className="font-bold leading-tight">Kenya Dairy Board</p>
+          <p className="text-slate-700 leading-tight">P.O Box 30406 -00100</p>
+          <p className="font-extrabold text-slate-800 leading-tight">Nairobi .</p>
+          <div className="pt-2 font-sans">
+            <p className="font-bold text-slate-600 text-[10pt] leading-tight">Cc. KDB- Kericho</p>
+            <p className="text-slate-500 text-[9.5pt] leading-tight">P.O Box 159-20200</p>
+            <p className="font-bold text-slate-600 text-[9.5pt] leading-tight">Kericho .</p>
+          </div>
         </div>
+
+        {/* Dynamic Stamped Badging visual on the right far side of the address details */}
+        {closure.status === 'approved' && (
+          <div className="pr-4 pt-2 select-none">
+            <div 
+              style={{ 
+                fontFamily: '"Arial Black", Arial, sans-serif',
+                borderWidth: '3.5px',
+                borderStyle: 'solid',
+                borderColor: '#ef4444', 
+                color: '#ef4444',
+                borderRadius: '8px',
+                transform: 'rotate(-6deg)',
+                backgroundColor: '#ffffff',
+                padding: '8px 20px',
+                display: 'inline-block',
+                fontWeight: 'heavy',
+                letterSpacing: '0.15em',
+                lineHeight: '1.1',
+                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+              }}
+              className="uppercase text-xl font-black"
+            >
+              RECEIVED
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Date */}
-      <div className="text-left mb-6 font-sans font-bold text-slate-900">
+      <div className="text-left mb-4 font-sans font-bold text-slate-900 text-[10.5pt]">
         {formattedDate}.
       </div>
 
       {/* Letter Body */}
-      <div className="space-y-5 text-left mb-12">
+      <div className="space-y-3.5 text-left mb-6 text-[10.5pt]">
         <p>Dear Sir/Madam,</p>
         
-        <p className="font-black text-slate-950 uppercase underline underline-offset-4 tracking-wide font-sans text-sm">
+        <p className="font-black text-slate-950 uppercase underline underline-offset-4 tracking-wide font-sans text-xs">
           RE: NOTIFICATION OF BUSINESS CLOSURE AND CESSATION OF OPERATIONS
         </p>
 
@@ -88,76 +113,50 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
       </div>
 
       {/* Yours faithfully, signature and signatories */}
-      <div className="grid grid-cols-2 gap-12 pt-6 border-t border-dashed border-slate-300 relative">
+      <div className="grid grid-cols-2 gap-8 pt-4 border-t border-dashed border-slate-300 relative">
         
         {/* LEFT SIDE: Applicant Operator Sign-off (Submitted By) */}
-        <div className="space-y-4 font-sans text-left">
+        <div className="space-y-3 font-sans text-left">
           <p className="font-serif italic text-slate-600 text-sm">Yours faithfully,</p>
           
-          <div className="h-16 flex items-center py-2">
+          <div className="h-16 flex items-center py-2 bg-white rounded-xl border border-slate-200 p-2 w-44">
             <img src={closure.clientSignature} className="max-h-full object-contain" alt="Operator Signature" crossOrigin="anonymous" />
           </div>
           
           <div>
-            <p className="font-extrabold text-slate-900 text-[11pt]">{closure.clientName}</p>
-            <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+            <p className="font-extrabold text-slate-900 text-[10.5pt]">{closure.clientName}</p>
+            <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">
               {closure.clientTitle || 'Registered DBO Operator'}
             </p>
           </div>
         </div>
 
         {/* RIGHT SIDE: KDB Received by Sign-off */}
-        <div className="space-y-4 font-sans text-left relative bg-slate-50/40 p-6 rounded-2xl border border-slate-100 min-h-[200px] overflow-visible">
-          
-          {/* Dynamic Stamped Badging visual (Enlarged twice as big) */}
-          {closure.status === 'approved' && (
-            <div 
-              style={{ 
-                fontFamily: '"Arial Black", Arial, sans-serif',
-                borderWidth: '10px',
-                borderStyle: 'solid',
-                borderColor: '#ef4444', // High-impact red is highly visible in print/PDF
-                color: '#ef4444',
-                borderRadius: '12px',
-                transform: 'rotate(-6deg)',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                boxShadow: '0 10px 20px rgba(0,0,0,0.12)',
-                padding: '20px 40px',
-                display: 'inline-block',
-                fontWeight: 'bold',
-                letterSpacing: '0.15em',
-                lineHeight: 1,
-              }}
-              className="absolute right-4 top-4 uppercase text-4xl font-extrabold select-none z-50 animate-pulse"
-            >
-              RECEIVED
-            </div>
-          )}
-
-          <p className="font-extrabold text-slate-900 text-xs uppercase tracking-wider border-b pb-1.5 border-slate-200">
+        <div className="space-y-3 font-sans text-left relative min-h-[120px]">
+          <p className="font-extrabold text-slate-900 text-xs uppercase tracking-wider border-b pb-1 border-slate-200">
             For Kenya Dairy Board:
           </p>
           
-          <div className="space-y-3">
-            <div className="h-16 flex items-center py-1">
+          <div className="space-y-2">
+            <div className="h-16 flex items-center py-2 bg-white rounded-xl border border-slate-200 p-2 w-44">
               {closure.officialSignature ? (
                 <img src={closure.officialSignature} className="max-h-full object-contain" alt="KDB Official Signature" crossOrigin="anonymous" />
               ) : (
-                <div className="italic text-rose-500 font-bold block py-4 text-[10px] uppercase">
-                  Awaiting Countersign notice
+                <div className="italic text-rose-500 font-bold block py-2 text-[10px] uppercase">
+                  Awaiting Countersign
                 </div>
               )}
             </div>
 
             <div>
-              <p className="font-extrabold text-slate-900 text-[11pt]">{closure.officialName || '______________________'}</p>
-              <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+              <p className="font-extrabold text-slate-900 text-[10.5pt]">{closure.officialName || '______________________'}</p>
+              <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">
                 {closure.officialTitle || 'Authorized KDB Official'}
               </p>
             </div>
 
             {closure.approvedAt && (
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest pt-1">
+              <p className="text-[8.5pt] text-slate-400 font-bold uppercase tracking-widest">
                 Receipt Date: {new Date(closure.approvedAt).toLocaleDateString('en-GB')}
               </p>
             )}
@@ -167,14 +166,14 @@ const ClosurePDFContent: React.FC<ClosurePDFContentProps> = ({ closure, id }) =>
 
       {/* Stamp comments docket if present and approved */}
       {closure.status === 'approved' && closure.officialComments && (
-        <div className="mt-8 p-5 bg-amber-50/50 border border-amber-100 rounded-2xl font-sans text-left text-xs text-slate-700 leading-relaxed font-bold">
-          <span className="not-italic font-black text-[9px] uppercase tracking-wider text-amber-700 block mb-1">KDB Assessment Remarks:</span>
+        <div className="mt-4 p-4 bg-amber-50/50 border border-amber-100 rounded-2xl font-sans text-left text-xs text-slate-700 leading-relaxed font-bold">
+          <span className="not-italic font-black text-[9px] uppercase tracking-wider text-amber-700 block mb-0.5">KDB Assessment Remarks:</span>
           &quot;{closure.officialComments}&quot;
         </div>
       )}
 
       {/* Small metadata copy line */}
-      <div className="pt-10 flex justify-between items-end opacity-40 font-sans text-[8px] tracking-wider uppercase mt-8 border-t border-slate-100 text-slate-400">
+      <div className="pt-4 flex justify-between items-end opacity-40 font-sans text-[8px] tracking-wider uppercase mt-4 border-t border-slate-100 text-slate-400">
         <div>System Record ID: {closure.id.toUpperCase()}</div>
         <div></div>
       </div>
