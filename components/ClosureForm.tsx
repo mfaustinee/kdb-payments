@@ -48,7 +48,6 @@ export const ClosureForm: React.FC<ClosureFormProps> = ({ onSubmit, onBack }) =>
     if (!formData.permitNo?.trim()) return setFormError('KDB Permit Number is required');
     if (!formData.premiseName?.trim()) return setFormError('Premise Name is required');
     if (!formData.county?.trim()) return setFormError('County is required');
-    if (!formData.subCounty?.trim()) return setFormError('Sub-County is required');
     if (!formData.location?.trim()) return setFormError('Physical Location is required');
     if (!formData.tel?.trim()) return setFormError('Phone Number is required');
     if (!formData.closureDate) return setFormError('Closure Date is required');
@@ -279,18 +278,6 @@ export const ClosureForm: React.FC<ClosureFormProps> = ({ onSubmit, onBack }) =>
                   placeholder="e.g. Kericho" 
                   value={formData.county} 
                   onChange={e => updateField('county', e.target.value)} 
-                  className="w-full px-6 py-4 rounded-2xl border bg-slate-50 focus:bg-white focus:ring-4 focus:ring-red-500/10 outline-none transition-all font-bold text-slate-800" 
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Sub-County *</label>
-                <input 
-                  required 
-                  type="text"
-                  placeholder="e.g. Belgut" 
-                  value={formData.subCounty} 
-                  onChange={e => updateField('subCounty', e.target.value)} 
                   className="w-full px-6 py-4 rounded-2xl border bg-slate-50 focus:bg-white focus:ring-4 focus:ring-red-500/10 outline-none transition-all font-bold text-slate-800" 
                 />
               </div>

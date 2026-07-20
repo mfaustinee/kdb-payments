@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { AgreementData, ClosureNotificationData } from '../types';
+import { AgreementData, ClosureNotificationData, ComplaintData, InquiryData } from '../types';
 
 const oklchToRgba = (oklchStr: string): string => {
   try {
@@ -330,3 +330,112 @@ export const downloadClosurePDF = async (closure: ClosureNotificationData, eleme
     alert(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
+
+export const downloadComplaintPDF = async (complaint: ComplaintData, elementId: string = 'complaint-form-pdf') => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error("Element not found for PDF generation");
+    return;
+  }
+
+  const restoreStyles = sanitizeOklch();
+
+  try {
+    window.scrollTo(0, 0);
+    
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: 'a4',
+      putOnlyUsedFonts: true
+    });
+
+    const targetWidth = 195;
+    const referenceWidth = 1024;
+    const scale = (targetWidth / referenceWidth);
+
+    await pdf.html(element, {
+      callback: function (doc) {
+        doc.save(`KDB_Stakeholder_Complaint_${complaint.id}.pdf`);
+        restoreStyles();
+      },
+      x: 5,
+      y: 2,
+      width: targetWidth,
+      windowWidth: referenceWidth,
+      autoPaging: 'text',
+      margin: [15, 10, 15, 5],
+      html2canvas: {
+        scale: scale,
+        useCORS: true,
+        logging: false,
+        letterRendering: true,
+        allowTaint: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: referenceWidth,
+        width: referenceWidth
+      }
+    });
+
+  } catch (error) {
+    restoreStyles();
+    console.error("Detailed complaint PDF Error:", error);
+    alert(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
+export const downloadInquiryPDF = async (inquiry: InquiryData, elementId: string = 'inquiry-form-pdf') => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error("Element not found for PDF generation");
+    return;
+  }
+
+  const restoreStyles = sanitizeOklch();
+
+  try {
+    window.scrollTo(0, 0);
+    
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: 'a4',
+      putOnlyUsedFonts: true
+    });
+
+    const targetWidth = 195;
+    const referenceWidth = 1024;
+    const scale = (targetWidth / referenceWidth);
+
+    await pdf.html(element, {
+      callback: function (doc) {
+        doc.save(`KDB_Client_Inquiry_${inquiry.id}.pdf`);
+        restoreStyles();
+      },
+      x: 5,
+      y: 2,
+      width: targetWidth,
+      windowWidth: referenceWidth,
+      autoPaging: 'text',
+      margin: [15, 10, 15, 5],
+      html2canvas: {
+        scale: scale,
+        useCORS: true,
+        logging: false,
+        letterRendering: true,
+        allowTaint: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: referenceWidth,
+        width: referenceWidth
+      }
+    });
+
+  } catch (error) {
+    restoreStyles();
+    console.error("Detailed inquiry PDF Error:", error);
+    alert(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+

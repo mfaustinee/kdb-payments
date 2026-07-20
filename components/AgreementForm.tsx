@@ -1,17 +1,27 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AgreementData, DebtorRecord } from '../types';
+import { AgreementData, DebtorRecord, LicensedClient } from '../types';
 import { SignaturePad } from './SignaturePad';
 import { Building2, Calendar, CreditCard, ChevronRight, CheckCircle2, ShieldCheck, Mail, AlertCircle, FileText, Lock, MapPin, Phone, Check, Camera, PenTool, Upload, Loader2, Send } from 'lucide-react';
 
 interface AgreementFormProps {
   agreements: AgreementData[];
   debtors: DebtorRecord[];
+  clients?: LicensedClient[];
   onSubmit: (data: AgreementData) => Promise<void>;
 }
 
-export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtors, onSubmit }) => {
-  const [step, setStep] = useState(0); 
+export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtors, clients, onSubmit }) => {
+  const [isAdminBypass, setIsAdminBypass] = useState<boolean>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return !!urlParams.get('bypassPermit');
+  });
+  
+  const [step, setStep] = useState<number>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('bypassPermit') ? 1 : 0;
+  });
+
   const [selectedDebtor, setSelectedDebtor] = useState<DebtorRecord | null>(null);
   const [lookupPermit, setLookupPermit] = useState('');
   const [lookupSecret, setLookupSecret] = useState('');
@@ -22,11 +32,80 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
   const [signatureMethod, setSignatureMethod] = useState<'draw' | 'upload'>('draw');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [formData, setFormData] = useState<Partial<AgreementData>>({
-    id: Math.random().toString(36).substr(2, 9),
-    status: 'submitted',
-    date: new Date().toISOString().split('T')[0],
+  const [formData, setFormData] = useState<Partial<AgreementData>>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const bypassPermit = urlParams.get('bypassPermit');
+    return {
+      id: Math.random().toString(36).substr(2, 9),
+      status: 'submitted',
+      date: new Date().toISOString().split('T')[0],
+      ...(bypassPermit ? { permitNo: bypassPermit, adminBypassed: true } : {})
+    };
   });
+
+  const bypassPermitRef = useRef<string | null>(null);
+  if (bypassPermitRef.current === null) {
+    const urlParams = new URLSearchParams(window.location.search);
+    bypassPermitRef.current = urlParams.get('bypassPermit');
+  }
+
+  useEffect(() => {
+    const bypassPermit = bypassPermitRef.current;
+    if (bypassPermit && (debtors.length > 0 || (clients && clients.length > 0))) {
+      const cleanBypassPermit = bypassPermit.toLowerCase().trim().replace(/^kdb\/lc\//, '');
+      
+      let found = debtors.find(d => {
+        const cleanPermitNo = (d.permitNo || '').toLowerCase().trim().replace(/^kdb\/lc\//, '');
+        const cleanId = (d.id || '').toLowerCase().trim();
+        return (d.permitNo || '').toLowerCase() === bypassPermit.toLowerCase() ||
+               (d.id || '').toLowerCase() === bypassPermit.toLowerCase() ||
+               cleanPermitNo === cleanBypassPermit ||
+               cleanId === cleanBypassPermit ||
+               (d.dboName || '').toLowerCase() === bypassPermit.toLowerCase();
+      });
+
+      if (!found && clients && clients.length > 0) {
+        const client = clients.find(c => 
+          (c.id || '').toLowerCase() === cleanBypassPermit || 
+          (c.id || '').toLowerCase() === bypassPermit.toLowerCase() ||
+          (c.clientName || '').toLowerCase() === bypassPermit.toLowerCase()
+        );
+        if (client) {
+          found = {
+            id: client.id,
+            dboName: client.clientName,
+            premiseName: client.premiseName,
+            permitNo: `KDB/LC/${client.id}`,
+            location: client.location,
+            county: client.county,
+            arrearsBreakdown: [],
+            totalArrears: 0,
+            totalArrearsWords: 'Zero Shillings Only',
+            arrearsPeriod: 'Current',
+            debitNoteNo: `DN/RET/${client.id}`,
+            tel: client.tel,
+            installments: []
+          };
+        }
+      }
+
+      if (found) {
+        setSelectedDebtor(found);
+        const { id: debtorId, ...debtorData } = found;
+        setFormData(prev => ({ 
+          ...prev, 
+          ...debtorData, 
+          adminBypassed: true,
+          installments: found.installments ? found.installments.map(i => ({ ...i })) : [] 
+        }));
+        
+        // Remove the bypassPermit parameter so the URL stays clean
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        bypassPermitRef.current = null;
+      }
+    }
+  }, [debtors, clients]);
 
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +186,7 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
     }
   };
 
-  const isStep1Valid = formData.clientEmail && formData.tel && formData.location;
+  const isStep1Valid = !!selectedDebtor && !!formData.clientEmail && !!formData.tel && !!formData.location;
   const isStep3Valid = formData.installments?.every(i => i.dueDate);
   const isStep4Valid = hasReadTerms && formData.clientName && formData.clientTitle && formData.clientSignature;
 
@@ -165,6 +244,8 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
           <div className="bg-white/10 px-4 py-2 rounded-2xl text-[10px] font-black tracking-widest uppercase flex items-center"><Lock className="w-3 h-3 mr-2" /> Secured Session</div>
         </div>
 
+
+
         <div className="p-12">
           {step === 0 && (
             <div className="max-w-md mx-auto py-12 space-y-10">
@@ -182,22 +263,32 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
             <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
               <div className="flex items-center space-x-2 text-emerald-600 font-black uppercase tracking-widest text-xs"><MapPin className="w-4 h-4" /><span>Business Information Verification</span></div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Operating Dairy Business Operator (DBO)</label>
-                      <div className="text-lg font-black text-slate-800">{selectedDebtor?.dboName}</div>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">County</label>
-                      <div className="text-lg font-black text-slate-800">{selectedDebtor?.county}</div>
+                {!selectedDebtor ? (
+                  <div className="md:col-span-2 p-10 bg-slate-50 border border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center space-y-4 animate-pulse">
+                    <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                    <div className="text-center">
+                      <p className="text-xs font-black text-slate-700 uppercase tracking-wider">Retrieving operator profile...</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Contacting KDB secure registry for permit {formData.permitNo}</p>
                     </div>
                   </div>
-                  <div className="pt-4 border-t border-slate-200">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Premise Name</label>
-                    <div className="text-sm font-bold text-slate-600">{selectedDebtor?.premiseName}</div>
+                ) : (
+                  <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Operating Dairy Business Operator (DBO)</label>
+                        <div className="text-lg font-black text-slate-800">{selectedDebtor.dboName}</div>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">County</label>
+                        <div className="text-lg font-black text-slate-800">{selectedDebtor.county}</div>
+                      </div>
+                    </div>
+                    <div className="pt-4 border-t border-slate-200">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Premise Name</label>
+                      <div className="text-sm font-bold text-slate-600">{selectedDebtor.premiseName}</div>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="space-y-1.5"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Premise Physical Location *</label><input required value={formData.location || ''} onChange={e => updateField('location', e.target.value)} className="w-full px-5 py-3 rounded-2xl border bg-white focus:ring-4 focus:ring-emerald-500/5 font-bold outline-none" placeholder="e.g. Plot 42, Kisumu Rd" /></div>
                 <div className="space-y-1.5"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Signatory Contact Email *</label><input required type="email" value={formData.clientEmail || ''} onChange={e => updateField('clientEmail', e.target.value)} className="w-full px-5 py-3 rounded-2xl border bg-white focus:ring-4 focus:ring-emerald-500/5 font-bold outline-none" placeholder="manager@business.com" /></div>
                 <div className="md:col-span-2 space-y-1.5"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Authorized Phone No *</label><input required value={formData.tel || ''} onChange={e => updateField('tel', e.target.value)} className="w-full px-5 py-3 rounded-2xl border bg-white focus:ring-4 focus:ring-emerald-500/5 font-bold outline-none" placeholder="0712 345 678" /></div>

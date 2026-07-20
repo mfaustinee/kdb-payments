@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { google } from "googleapis";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,8 +13,13 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(process.cwd(), "data");
 const AGREEMENTS_FILE = path.join(DATA_DIR, "agreements.json");
 const CLOSURES_FILE = path.join(DATA_DIR, "closures.json");
+const COMPLAINTS_FILE = path.join(DATA_DIR, "complaints.json");
+const INQUIRIES_FILE = path.join(DATA_DIR, "inquiries.json");
 const DEBTORS_FILE = path.join(DATA_DIR, "debtors.json");
 const STAFF_FILE = path.join(DATA_DIR, "staff.json");
+const CLIENTS_FILE = path.join(DATA_DIR, "clients.json");
+const RETURNS_FILE = path.join(DATA_DIR, "returns.json");
+const VALIDATIONS_FILE = path.join(DATA_DIR, "validations.json");
 const LOG_FILE = path.join(DATA_DIR, "server.log");
 
 // Ensure data directory exists early for logging
@@ -142,12 +148,18 @@ async function startServer() {
         process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
       );
 
-      logToFile(`[API] Health check result: writable=${writable}, supabaseConfigured=${supabaseConfigured}`);
+      const googleConfigured = !!(
+        process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY
+      );
+
+      logToFile(`[API] Health check result: writable=${writable}, supabaseConfigured=${supabaseConfigured}, googleConfigured=${googleConfigured}`);
 
       res.json({
         status: "ok",
         writable,
         supabaseConfigured,
+        googleConfigured,
+        configured: googleConfigured, // Checked by frontend DataValidationModule
         timestamp: new Date().toISOString()
       });
     });
@@ -411,6 +423,210 @@ async function startServer() {
       }
     });
 
+    logToFile("[Server] Registering complaints routes...");
+    app.get("/api/complaints", async (req, res) => {
+      try {
+        if (!fs.existsSync(COMPLAINTS_FILE)) {
+          return res.json([]);
+        }
+        const data = await fs.promises.readFile(COMPLAINTS_FILE, "utf-8");
+        try {
+          res.json(JSON.parse(data));
+        } catch (parseError) {
+          logToFile(`Error parsing complaints JSON: ${parseError}`);
+          res.json([]);
+        }
+      } catch (error) {
+        logToFile(`Error reading complaints: ${error}`);
+        res.status(500).json({ error: "Failed to read complaints" });
+      }
+    });
+
+    app.post("/api/complaints", async (req, res) => {
+      try {
+        logToFile(`Attempting to save complaint: ${req.body?.id}`);
+        if (!req.body || !req.body.id) {
+          logToFile("Error: Missing complaint ID in request body");
+          return res.status(400).json({ error: "Missing complaint ID" });
+        }
+
+        let complaints = [];
+        try {
+          if (fs.existsSync(COMPLAINTS_FILE)) {
+            const data = await fs.promises.readFile(COMPLAINTS_FILE, "utf-8");
+            complaints = JSON.parse(data);
+          }
+        } catch (readError) {
+          logToFile(`Warning: Could not read complaints file, starting fresh: ${readError}`);
+          complaints = [];
+        }
+
+        const newComplaint = req.body;
+        const index = complaints.findIndex((c: any) => c.id === newComplaint.id);
+        if (index !== -1) {
+          logToFile(`Updating existing complaint: ${newComplaint.id}`);
+          complaints[index] = newComplaint;
+        } else {
+          logToFile(`Adding new complaint: ${newComplaint.id}`);
+          complaints.push(newComplaint);
+        }
+
+        await fs.promises.writeFile(COMPLAINTS_FILE, JSON.stringify(complaints, null, 2));
+        logToFile(`Successfully saved complaint: ${newComplaint.id}`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error saving complaint: ${error.message}`);
+        res.status(500).json({ error: "Failed to save complaint", details: error.message });
+      }
+    });
+
+    app.patch("/api/complaints/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        logToFile(`Attempting to update complaint: ${id}`);
+        
+        let complaints = [];
+        try {
+          const data = await fs.promises.readFile(COMPLAINTS_FILE, "utf-8");
+          complaints = JSON.parse(data);
+        } catch (readError) {
+          logToFile(`Error reading complaints during update: ${readError}`);
+          return res.status(500).json({ error: "Failed to read complaints" });
+        }
+
+        const index = complaints.findIndex((c: any) => c.id === id);
+        if (index !== -1) {
+          complaints[index] = { ...complaints[index], ...req.body };
+          await fs.promises.writeFile(COMPLAINTS_FILE, JSON.stringify(complaints, null, 2));
+          logToFile(`Successfully updated complaint: ${id}`);
+          res.json({ success: true });
+        } else {
+          logToFile(`Error: Complaint not found for update: ${id}`);
+          res.status(404).json({ error: "Not found" });
+        }
+      } catch (error: any) {
+        logToFile(`CRITICAL Error updating complaint: ${error.message}`);
+        res.status(500).json({ error: "Failed to update complaint", details: error.message });
+      }
+    });
+
+    app.delete("/api/complaints/:id", async (req, res) => {
+      try {
+        const data = await fs.promises.readFile(COMPLAINTS_FILE, "utf-8");
+        const complaints = JSON.parse(data);
+        const { id } = req.params;
+        const filtered = complaints.filter((c: any) => c.id !== id);
+        await fs.promises.writeFile(COMPLAINTS_FILE, JSON.stringify(filtered, null, 2));
+        logToFile(`Deleted complaint: ${id}`);
+        res.json({ success: true });
+      } catch (error) {
+        logToFile(`Error deleting complaint ${req.params.id}: ${error}`);
+        res.status(500).json({ error: "Failed to delete complaint" });
+      }
+    });
+
+    logToFile("[Server] Registering inquiries routes...");
+    app.get("/api/inquiries", async (req, res) => {
+      try {
+        if (!fs.existsSync(INQUIRIES_FILE)) {
+          return res.json([]);
+        }
+        const data = await fs.promises.readFile(INQUIRIES_FILE, "utf-8");
+        try {
+          res.json(JSON.parse(data));
+        } catch (parseError) {
+          logToFile(`Error parsing inquiries JSON: ${parseError}`);
+          res.json([]);
+        }
+      } catch (error) {
+        logToFile(`Error reading inquiries: ${error}`);
+        res.status(500).json({ error: "Failed to read inquiries" });
+      }
+    });
+
+    app.post("/api/inquiries", async (req, res) => {
+      try {
+        logToFile(`Attempting to save inquiry: ${req.body?.id}`);
+        if (!req.body || !req.body.id) {
+          logToFile("Error: Missing inquiry ID in request body");
+          return res.status(400).json({ error: "Missing inquiry ID" });
+        }
+
+        let inquiries = [];
+        try {
+          if (fs.existsSync(INQUIRIES_FILE)) {
+            const data = await fs.promises.readFile(INQUIRIES_FILE, "utf-8");
+            inquiries = JSON.parse(data);
+          }
+        } catch (readError) {
+          logToFile(`Warning: Could not read inquiries file, starting fresh: ${readError}`);
+          inquiries = [];
+        }
+
+        const newInquiry = req.body;
+        const index = inquiries.findIndex((c: any) => c.id === newInquiry.id);
+        if (index !== -1) {
+          logToFile(`Updating existing inquiry: ${newInquiry.id}`);
+          inquiries[index] = newInquiry;
+        } else {
+          logToFile(`Adding new inquiry: ${newInquiry.id}`);
+          inquiries.push(newInquiry);
+        }
+
+        await fs.promises.writeFile(INQUIRIES_FILE, JSON.stringify(inquiries, null, 2));
+        logToFile(`Successfully saved inquiry: ${newInquiry.id}`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error saving inquiry: ${error.message}`);
+        res.status(500).json({ error: "Failed to save inquiry", details: error.message });
+      }
+    });
+
+    app.patch("/api/inquiries/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        logToFile(`Attempting to update inquiry: ${id}`);
+        
+        let inquiries = [];
+        try {
+          const data = await fs.promises.readFile(INQUIRIES_FILE, "utf-8");
+          inquiries = JSON.parse(data);
+        } catch (readError) {
+          logToFile(`Error reading inquiries during update: ${readError}`);
+          return res.status(500).json({ error: "Failed to read inquiries" });
+        }
+
+        const index = inquiries.findIndex((c: any) => c.id === id);
+        if (index !== -1) {
+          inquiries[index] = { ...inquiries[index], ...req.body };
+          await fs.promises.writeFile(INQUIRIES_FILE, JSON.stringify(inquiries, null, 2));
+          logToFile(`Successfully updated inquiry: ${id}`);
+          res.json({ success: true });
+        } else {
+          logToFile(`Error: Inquiry not found for update: ${id}`);
+          res.status(404).json({ error: "Not found" });
+        }
+      } catch (error: any) {
+        logToFile(`CRITICAL Error updating inquiry: ${error.message}`);
+        res.status(500).json({ error: "Failed to update inquiry", details: error.message });
+      }
+    });
+
+    app.delete("/api/inquiries/:id", async (req, res) => {
+      try {
+        const data = await fs.promises.readFile(INQUIRIES_FILE, "utf-8");
+        const inquiries = JSON.parse(data);
+        const { id } = req.params;
+        const filtered = inquiries.filter((c: any) => c.id !== id);
+        await fs.promises.writeFile(INQUIRIES_FILE, JSON.stringify(filtered, null, 2));
+        logToFile(`Deleted inquiry: ${id}`);
+        res.json({ success: true });
+      } catch (error) {
+        logToFile(`Error deleting inquiry ${req.params.id}: ${error}`);
+        res.status(500).json({ error: "Failed to delete inquiry" });
+      }
+    });
+
     logToFile("[Server] Registering debtors routes...");
     app.get("/api/debtors", async (req, res) => {
     try {
@@ -441,6 +657,261 @@ async function startServer() {
     }
   });
 
+    logToFile("[Server] Registering clients routes...");
+    app.get("/api/clients", async (req, res) => {
+      try {
+        if (!fs.existsSync(CLIENTS_FILE)) {
+          return res.json([]);
+        }
+        const data = await fs.promises.readFile(CLIENTS_FILE, "utf-8");
+        try {
+          res.json(JSON.parse(data));
+        } catch (parseError) {
+          logToFile(`Error parsing clients JSON: ${parseError}`);
+          res.json([]);
+        }
+      } catch (error) {
+        logToFile(`Error reading clients: ${error}`);
+        res.status(500).json({ error: "Failed to read clients" });
+      }
+    });
+
+    app.post("/api/clients", async (req, res) => {
+      try {
+        logToFile(`Attempting to save client/clients`);
+        if (!req.body) {
+          return res.status(400).json({ error: "Missing request body" });
+        }
+
+        let clients = [];
+        try {
+          if (fs.existsSync(CLIENTS_FILE)) {
+            const data = await fs.promises.readFile(CLIENTS_FILE, "utf-8");
+            clients = JSON.parse(data);
+          }
+        } catch (readError) {
+          logToFile(`Warning: Could not read clients file, starting fresh: ${readError}`);
+          clients = [];
+        }
+
+        if (Array.isArray(req.body)) {
+          clients = req.body;
+        } else {
+          const newClient = req.body;
+          if (!newClient.id) {
+            return res.status(400).json({ error: "Missing client ID" });
+          }
+          const index = clients.findIndex((c: any) => c.id === newClient.id);
+          if (index !== -1) {
+            logToFile(`Updating existing client: ${newClient.id}`);
+            clients[index] = newClient;
+          } else {
+            logToFile(`Adding new client: ${newClient.id}`);
+            clients.push(newClient);
+          }
+        }
+
+        await fs.promises.writeFile(CLIENTS_FILE, JSON.stringify(clients, null, 2));
+        logToFile(`Successfully saved clients`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error saving clients: ${error.message}`);
+        res.status(500).json({ error: "Failed to save clients", details: error.message });
+      }
+    });
+
+    app.delete("/api/clients/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        logToFile(`Attempting to delete client: ${id}`);
+        
+        if (!fs.existsSync(CLIENTS_FILE)) {
+          return res.json({ success: true });
+        }
+
+        const data = await fs.promises.readFile(CLIENTS_FILE, "utf-8");
+        const clients = JSON.parse(data);
+        const filtered = clients.filter((c: any) => c.id !== id);
+        
+        await fs.promises.writeFile(CLIENTS_FILE, JSON.stringify(filtered, null, 2));
+        logToFile(`Successfully deleted client: ${id}`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error deleting client: ${error.message}`);
+        res.status(500).json({ error: "Failed to delete client", details: error.message });
+      }
+    });
+
+    logToFile("[Server] Registering returns routes...");
+    app.get("/api/returns", async (req, res) => {
+      try {
+        if (!fs.existsSync(RETURNS_FILE)) {
+          return res.json([]);
+        }
+        const data = await fs.promises.readFile(RETURNS_FILE, "utf-8");
+        try {
+          res.json(JSON.parse(data));
+        } catch (parseError) {
+          logToFile(`Error parsing returns JSON: ${parseError}`);
+          res.json([]);
+        }
+      } catch (error) {
+        logToFile(`Error reading returns: ${error}`);
+        res.status(500).json({ error: "Failed to read returns" });
+      }
+    });
+
+    app.post("/api/returns", async (req, res) => {
+      try {
+        logToFile(`Attempting to save return(s)`);
+        if (!req.body) {
+          return res.status(400).json({ error: "Missing request body" });
+        }
+
+        let returnsList = [];
+        try {
+          if (fs.existsSync(RETURNS_FILE)) {
+            const data = await fs.promises.readFile(RETURNS_FILE, "utf-8");
+            returnsList = JSON.parse(data);
+          }
+        } catch (readError) {
+          logToFile(`Warning: Could not read returns file, starting fresh: ${readError}`);
+          returnsList = [];
+        }
+
+        if (Array.isArray(req.body)) {
+          returnsList = req.body;
+        } else {
+          const newReturn = req.body;
+          if (!newReturn.id) {
+            return res.status(400).json({ error: "Missing return ID" });
+          }
+          const index = returnsList.findIndex((r: any) => r.id === newReturn.id);
+          if (index !== -1) {
+            logToFile(`Updating existing return: ${newReturn.id}`);
+            returnsList[index] = newReturn;
+          } else {
+            logToFile(`Adding new return: ${newReturn.id}`);
+            returnsList.push(newReturn);
+          }
+        }
+
+        await fs.promises.writeFile(RETURNS_FILE, JSON.stringify(returnsList, null, 2));
+        logToFile(`Successfully saved returns`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error saving returns: ${error.message}`);
+        res.status(500).json({ error: "Failed to save returns", details: error.message });
+      }
+    });
+
+    app.delete("/api/returns/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        logToFile(`Attempting to delete return: ${id}`);
+        
+        if (!fs.existsSync(RETURNS_FILE)) {
+          return res.json({ success: true });
+        }
+
+        const data = await fs.promises.readFile(RETURNS_FILE, "utf-8");
+        const returnsList = JSON.parse(data);
+        const filtered = returnsList.filter((r: any) => r.id !== id);
+        
+        await fs.promises.writeFile(RETURNS_FILE, JSON.stringify(filtered, null, 2));
+        logToFile(`Successfully deleted return: ${id}`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error deleting return: ${error.message}`);
+        res.status(500).json({ error: "Failed to delete return", details: error.message });
+      }
+    });
+
+    logToFile("[Server] Registering validations routes...");
+    app.get("/api/validations", async (req, res) => {
+      try {
+        if (!fs.existsSync(VALIDATIONS_FILE)) {
+          return res.json([]);
+        }
+        const data = await fs.promises.readFile(VALIDATIONS_FILE, "utf-8");
+        try {
+          res.json(JSON.parse(data));
+        } catch (parseError) {
+          logToFile(`Error parsing validations JSON: ${parseError}`);
+          res.json([]);
+        }
+      } catch (error) {
+        logToFile(`Error reading validations: ${error}`);
+        res.status(500).json({ error: "Failed to read validations" });
+      }
+    });
+
+    app.post("/api/validations", async (req, res) => {
+      try {
+        logToFile(`Attempting to save validation(s)`);
+        if (!req.body) {
+          return res.status(400).json({ error: "Missing request body" });
+        }
+
+        let validationsList = [];
+        try {
+          if (fs.existsSync(VALIDATIONS_FILE)) {
+            const data = await fs.promises.readFile(VALIDATIONS_FILE, "utf-8");
+            validationsList = JSON.parse(data);
+          }
+        } catch (readError) {
+          logToFile(`Warning: Could not read validations file, starting fresh: ${readError}`);
+          validationsList = [];
+        }
+
+        if (Array.isArray(req.body)) {
+          validationsList = req.body;
+        } else {
+          const newValidation = req.body;
+          if (!newValidation.id) {
+            return res.status(400).json({ error: "Missing validation ID" });
+          }
+          const index = validationsList.findIndex((v: any) => v.id === newValidation.id);
+          if (index !== -1) {
+            logToFile(`Updating existing validation: ${newValidation.id}`);
+            validationsList[index] = newValidation;
+          } else {
+            logToFile(`Adding new validation: ${newValidation.id}`);
+            validationsList.push(newValidation);
+          }
+        }
+
+        await fs.promises.writeFile(VALIDATIONS_FILE, JSON.stringify(validationsList, null, 2));
+        logToFile(`Successfully saved validations`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error saving validations: ${error.message}`);
+        res.status(500).json({ error: "Failed to save validations", details: error.message });
+      }
+    });
+
+    app.delete("/api/validations/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        logToFile(`Attempting to delete validation: ${id}`);
+        
+        if (!fs.existsSync(VALIDATIONS_FILE)) {
+          return res.json({ success: true });
+        }
+
+        const data = await fs.promises.readFile(VALIDATIONS_FILE, "utf-8");
+        const validationsList = JSON.parse(data);
+        const filtered = validationsList.filter((v: any) => v.id !== id);
+        
+        await fs.promises.writeFile(VALIDATIONS_FILE, JSON.stringify(filtered, null, 2));
+        logToFile(`Successfully deleted validation ${id}`);
+        res.json({ success: true });
+      } catch (error: any) {
+        logToFile(`CRITICAL Error deleting validation: ${error.message}`);
+        res.status(500).json({ error: "Failed to delete validation", details: error.message });
+      }
+    });
+
     logToFile("[Server] Registering staff routes...");
     app.get("/api/staff", async (req, res) => {
     try {
@@ -468,6 +939,101 @@ async function startServer() {
     } catch (error: any) {
       logToFile(`CRITICAL Error saving staff config: ${error.message}`);
       res.status(500).json({ error: "Failed to save staff config", details: error.message });
+    }
+  });
+
+  app.post("/api/submit", async (req, res) => {
+    try {
+      logToFile("[API] Received /api/submit request");
+      const { data: formData, pdf, isAmendment } = req.body;
+      
+      if (!formData) {
+        logToFile("[API] Submit failed: Missing form data in request body");
+        return res.status(400).json({ error: "Missing form data" });
+      }
+
+      const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+      const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+      const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+
+      if (!email || !privateKeyRaw || !spreadsheetId) {
+        logToFile("[API] Submit failed: Google Sheets environment variables are not fully configured");
+        return res.status(500).json({ 
+          error: "Google Sheets integration is not configured. Please verify GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SPREADSHEET_ID in your environment." 
+        });
+      }
+
+      // Clean private key
+      let privateKey = privateKeyRaw.trim();
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.substring(1, privateKey.length - 1);
+      }
+      privateKey = privateKey.replace(/\\n/g, "\n");
+
+      // Category-based spreadsheet routing
+      const category = (formData.category || "").trim().toLowerCase();
+      let targetSheet = "MD & CI";
+      if (category.includes("dispenser") || category.includes("milk bar")) {
+        targetSheet = "Dispensers";
+      } else if (category.includes("cottage") || category.includes("mini dairy")) {
+        targetSheet = "MD & CI";
+      } else if (category.includes("cp") || category.includes("processor") || category.includes("cooling")) {
+        targetSheet = "Cooling Plants";
+      }
+
+      logToFile(`[API] Routing submission to sheet: ${targetSheet} for category: ${formData.category}`);
+
+      // Aggregate sales figures
+      const sales = formData.sales || [];
+      const totalQtyDeclared = sales.reduce((sum: number, s: any) => sum + (parseFloat(s.qtyDeclared) || 0), 0);
+      const totalVerifiedQty = sales.reduce((sum: number, s: any) => sum + (parseFloat(s.verifiedQty) || 0), 0);
+      const totalUnderDeclared = sales.reduce((sum: number, s: any) => sum + (parseFloat(s.underDeclared) || 0), 0);
+
+      // Prepare row values matching sheets pattern
+      const formattedRows = [
+        [
+          formData.date || new Date().toISOString().split('T')[0],
+          formData.dboName || "",
+          formData.premiseName || "",
+          formData.permitNo || "",
+          formData.category || "",
+          formData.location || "",
+          formData.county || "",
+          formData.contacts || "",
+          formData.validationPeriod || "",
+          totalQtyDeclared,
+          totalVerifiedQty,
+          totalUnderDeclared,
+          formData.comments || "",
+          formData.complianceOfficer || "",
+          isAmendment ? "Yes" : "No",
+          pdf ? "[PDF Attached]" : "No PDF"
+        ]
+      ];
+
+      // Authenticate with Google
+      const auth = new google.auth.JWT({
+        email,
+        key: privateKey,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+      });
+
+      const sheets = google.sheets({ version: "v4", auth });
+
+      // Append row to target sheet
+      logToFile(`[API] Appending row to sheet ${targetSheet} on spreadsheet ${spreadsheetId}`);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${targetSheet}!A:Z`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: formattedRows },
+      });
+
+      logToFile("[API] Google Sheets sync completed successfully");
+      res.json({ success: true, message: "Sync successful" });
+    } catch (error: any) {
+      logToFile(`[API] Google Sheets sync failed: ${error.message}\nStack: ${error.stack}`);
+      res.status(500).json({ error: `Google Sheets Sync failed: ${error.message}` });
     }
   });
 
@@ -548,6 +1114,117 @@ async function startServer() {
       fs.writeFileSync(file, JSON.stringify([], null, 2));
     }
   });
+
+  if (!fs.existsSync(CLIENTS_FILE)) {
+    console.log(`[Server] Initializing clients file with default licensed clients...`);
+    const initialClients = [
+      {
+        id: "LC-001",
+        clientName: "Sunrise Dairies",
+        premiseName: "Sunrise Main Plant",
+        startYear: 2022,
+        startMonth: "January",
+        endYear: null,
+        endMonth: null,
+        tel: "0712345678",
+        contactPerson: "John Doe",
+        location: "Kericho Town, Court Road",
+        premiseCategory: "Processor",
+        county: "Kericho",
+        coolingCapacity: 15000,
+        permitStatus: "active",
+        operationalStatus: "operating",
+        levyInfo: "QFR"
+      },
+      {
+        id: "LC-002",
+        clientName: "Belgut Milk Bar",
+        premiseName: "Belgut Outlet",
+        startYear: 2022,
+        startMonth: "June",
+        endYear: 2024,
+        endMonth: "December",
+        tel: "0722334455",
+        contactPerson: "Alice Koech",
+        location: "Kapsoit, Belgut",
+        premiseCategory: "Milk Bar",
+        county: "Kericho",
+        permitStatus: "inactive",
+        operationalStatus: "closed",
+        levyInfo: "DNQ-R"
+      },
+      {
+        id: "LC-003",
+        clientName: "Tea County Dispensers",
+        premiseName: "Kenyagano Station",
+        startYear: 2023,
+        startMonth: "March",
+        endYear: null,
+        endMonth: null,
+        tel: "0733445566",
+        contactPerson: "David Langat",
+        location: "Litein, Bureti",
+        premiseCategory: "Dispenser",
+        county: "Kericho",
+        permitStatus: "active",
+        operationalStatus: "operating",
+        levyInfo: "QFR"
+      },
+      {
+        id: "LC-004",
+        clientName: "Kipkelion Cooling Association",
+        premiseName: "Kipkelion Plant",
+        startYear: 2022,
+        startMonth: "August",
+        endYear: null,
+        endMonth: null,
+        tel: "0744556677",
+        contactPerson: "Grace Chepngetich",
+        location: "Kipkelion Town",
+        premiseCategory: "Cooling Plant",
+        county: "Kericho",
+        coolingCapacity: 8000,
+        permitStatus: "active",
+        operationalStatus: "operating",
+        levyInfo: "QFR"
+      },
+      {
+        id: "LC-005",
+        clientName: "Sotik Border Cottage",
+        premiseName: "Borderline Creamery",
+        startYear: 2022,
+        startMonth: "October",
+        endYear: null,
+        endMonth: null,
+        tel: "0755667788",
+        contactPerson: "Robert Sang",
+        location: "Sotik Road, Sigowet",
+        premiseCategory: "Cottage Industry",
+        county: "Kericho",
+        permitStatus: "active",
+        operationalStatus: "operating",
+        levyInfo: "DNQ-R"
+      },
+      {
+        id: "LC-006",
+        clientName: "Ainamoi Mini Dairy",
+        premiseName: "Ainamoi Depot",
+        startYear: 2022,
+        startMonth: "February",
+        endYear: null,
+        endMonth: null,
+        tel: "0766778899",
+        contactPerson: "Sarah Cherono",
+        location: "Ainamoi Junction",
+        premiseCategory: "Mini Dairy",
+        county: "Kericho",
+        permitStatus: "active",
+        operationalStatus: "operating",
+        levyInfo: "DNQ-R"
+      }
+    ];
+    fs.writeFileSync(CLIENTS_FILE, JSON.stringify(initialClients, null, 2));
+  }
 
   if (!fs.existsSync(STAFF_FILE)) {
     console.log(`[Server] Initializing staff file: ${STAFF_FILE}`);

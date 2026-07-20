@@ -1,9 +1,11 @@
 import React from 'react';
-import { ShieldCheck, ArrowRight, Building2, FileCheck, CircleCheck, AlertCircle } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Building2, FileCheck, CircleCheck, HelpCircle } from 'lucide-react';
 
 interface PortalHubProps {
   onSelectPaymentPortal: () => void;
   onSelectClosurePortal: () => void;
+  onSelectComplaintPortal: () => void;
+  onSelectInquiryPortal: () => void;
   unreadAgreementsCount: number;
   unreadClosuresCount: number;
 }
@@ -11,9 +13,11 @@ interface PortalHubProps {
 export const PortalHub: React.FC<PortalHubProps> = ({ 
   onSelectPaymentPortal, 
   onSelectClosurePortal,
+  onSelectComplaintPortal,
+  onSelectInquiryPortal,
 }) => {
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12 md:py-24 space-y-12 animate-in fade-in zoom-in-95 duration-500">
+    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12 animate-in fade-in zoom-in-95 duration-500">
       <div className="text-center space-y-4">
         <div className="inline-flex p-3 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm mb-2">
           <ShieldCheck className="w-8 h-8 text-emerald-600" />
@@ -24,14 +28,78 @@ export const PortalHub: React.FC<PortalHubProps> = ({
         <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">
           Regulatory Compliance & Client Portal
         </p>
-        <p className="max-w-xl mx-auto text-sm text-slate-500 font-medium leading-relaxed">
+        <p className="max-w-2xl mx-auto text-sm text-slate-500 font-medium leading-relaxed">
           Welcome to the Kenya Dairy Board compliance support platform. 
-          Select a simplified regulatory pathway below to execute a structured levy payment agreement or formally submit a business cessation notice.
+          Select a simplified regulatory pathway below to execute a structured levy payment agreement, formally submit a business cessation notice, file a stakeholder complaint, or submit a client inquiry.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-        {/* Card 1: Levy Payment Agreement */}
+        {/* Card 1: Client Inquiry Form */}
+        <div 
+          onClick={onSelectInquiryPortal}
+          className="group relative cursor-pointer overflow-hidden rounded-[32px] bg-white border border-slate-100 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-sky-300 p-8 flex flex-col justify-between space-y-8"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50/40 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-500"></div>
+          
+          <div className="space-y-6">
+            <div className="inline-flex p-4 bg-sky-50 rounded-2xl text-sky-600 border border-sky-100">
+              <HelpCircle className="w-6 h-6" style={{ color: '#0284c7' }} />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-slate-800 tracking-tight group-hover:text-sky-700 transition-colors">
+                Client Inquiry Form
+              </h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                KDB Information Desk
+              </p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                Submit general or specific inquiries regarding dairy standards, license renewals, imports/exports regulations, or training schedules.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ask Inquiry</span>
+            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-sky-600 group-hover:text-white transition-all">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Stakeholder Complaints Form */}
+        <div 
+          onClick={onSelectComplaintPortal}
+          className="group relative cursor-pointer overflow-hidden rounded-[32px] bg-white border border-slate-100 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-rose-300 p-8 flex flex-col justify-between space-y-8"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50/40 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-500"></div>
+          
+          <div className="space-y-6">
+            <div className="inline-flex p-4 bg-rose-50 rounded-2xl text-rose-600 border border-rose-100">
+              <FileCheck className="w-6 h-6" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-slate-800 tracking-tight group-hover:text-rose-700 transition-colors">
+                Stakeholder Complaints Form
+              </h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                KDB Feedback & Redress
+              </p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                Formally submit complaints regarding licensing issues, delayed services, pricing disputes, staff conduct, or regulatory enforcement concerns.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">File Complaint</span>
+            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-red-700 group-hover:text-white transition-all">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Levy Payment Agreement */}
         <div 
           onClick={onSelectPaymentPortal}
           className="group relative cursor-pointer overflow-hidden rounded-[32px] bg-white border border-slate-100 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-emerald-300 p-8 flex flex-col justify-between space-y-8"
@@ -63,7 +131,7 @@ export const PortalHub: React.FC<PortalHubProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Business Closure Notification */}
+        {/* Card 4: Business Closure Notification */}
         <div 
           onClick={onSelectClosurePortal}
           className="group relative cursor-pointer overflow-hidden rounded-[32px] bg-white border border-slate-100 shadow-xl transition-all duration-300 hover:shadow-2xl hover:border-red-300 p-8 flex flex-col justify-between space-y-8"
