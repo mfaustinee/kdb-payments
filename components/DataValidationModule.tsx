@@ -2009,7 +2009,7 @@ export function DataValidationModule() {
 
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
           if (!transparent) {
             // Fill with white background to avoid black background on JPEGs with transparency
@@ -2032,7 +2032,7 @@ export function DataValidationModule() {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) {
           resolve(base64);
           return;

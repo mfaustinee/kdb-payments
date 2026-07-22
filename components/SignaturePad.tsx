@@ -73,7 +73,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) {
           resolve(base64);
           return;
@@ -126,7 +126,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
         canvas.width = maxWidth;
         canvas.height = img.height * scale;
         
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         }
@@ -196,7 +196,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
       
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
         // Draw the current video frame on the temporary canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);

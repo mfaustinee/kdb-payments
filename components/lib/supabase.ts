@@ -4,6 +4,10 @@ let supabaseInstance: any = null;
 
 const getSupabaseInstance = () => {
   if (supabaseInstance) return supabaseInstance;
+  if ((window as any).__supabaseInstance) {
+    supabaseInstance = (window as any).__supabaseInstance;
+    return supabaseInstance;
+  }
 
   const env = (window as any)._env_ || {};
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL || '';
@@ -12,6 +16,7 @@ const getSupabaseInstance = () => {
   if (supabaseUrl && supabaseKey) {
     try {
       supabaseInstance = createClient(supabaseUrl, supabaseKey);
+      (window as any).__supabaseInstance = supabaseInstance;
     } catch (e) {
       console.error("[Supabase Proxy] Init error:", e);
     }

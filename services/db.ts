@@ -55,8 +55,13 @@ const getSupabase = async () => {
 
     if (supabaseUrl && supabaseKey) {
       try {
-        const client = createClient(supabaseUrl, supabaseKey);
-        supabase = client;
+        if ((window as any).__supabaseInstance) {
+          supabase = (window as any).__supabaseInstance;
+        } else {
+          const client = createClient(supabaseUrl, supabaseKey);
+          supabase = client;
+          (window as any).__supabaseInstance = client;
+        }
         console.log("[DBService] Supabase client initialized successfully (Singleton)");
         return supabase;
       } catch (e) {
