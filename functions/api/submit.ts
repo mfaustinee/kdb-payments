@@ -31,9 +31,13 @@ export async function onRequest(context: { request: Request; env: Record<string,
     }
 
     const env = context.env || {};
-    const clientEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || (typeof process !== 'undefined' && process.env ? process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL : '');
-    const privateKey = env.GOOGLE_PRIVATE_KEY || (typeof process !== 'undefined' && process.env ? process.env.GOOGLE_PRIVATE_KEY : '');
-    const spreadsheetId = env.GOOGLE_SPREADSHEET_ID || body.spreadsheetId || (typeof process !== 'undefined' && process.env ? process.env.GOOGLE_SPREADSHEET_ID : '');
+    let clientEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || (typeof process !== 'undefined' && process.env ? process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL : '');
+    let privateKey = env.GOOGLE_PRIVATE_KEY || (typeof process !== 'undefined' && process.env ? process.env.GOOGLE_PRIVATE_KEY : '');
+    let spreadsheetId = env.GOOGLE_SPREADSHEET_ID || body.spreadsheetId || (typeof process !== 'undefined' && process.env ? process.env.GOOGLE_SPREADSHEET_ID : '');
+
+    if (clientEmail) clientEmail = clientEmail.trim().replace(/^["']|["']$/g, '');
+    if (privateKey) privateKey = privateKey.trim().replace(/^["']|["']$/g, '');
+    if (spreadsheetId) spreadsheetId = spreadsheetId.trim().replace(/^["']|["']$/g, '');
 
     if (!spreadsheetId) {
       return new Response(

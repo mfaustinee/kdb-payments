@@ -3,6 +3,8 @@ export async function getGoogleAccessToken(clientEmail: string, privateKeyPem: s
     throw new Error("Service Account credentials (EMAIL/PRIVATE_KEY) are missing.");
   }
 
+  let email = clientEmail.trim().replace(/^["']|["']$/g, '');
+
   // Clean the private key
   let privateKey = privateKeyPem.trim();
   if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
@@ -41,7 +43,7 @@ export async function getGoogleAccessToken(clientEmail: string, privateKeyPem: s
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
-    iss: clientEmail,
+    iss: email,
     scope: "https://www.googleapis.com/auth/spreadsheets",
     aud: "https://oauth2.googleapis.com/token",
     exp: now + 3600,
@@ -103,8 +105,9 @@ export async function appendToGoogleSheet(
   sheetName: string,
   rows: any[][]
 ) {
+  const cleanSpreadsheetId = spreadsheetId.trim().replace(/^["']|["']$/g, '');
   const range = `${sheetName}!A:Z`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(url, {
     method: "POST",

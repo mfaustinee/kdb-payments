@@ -950,12 +950,14 @@ async function startServer() {
 
   // Service Account Auth Helper for Google Sheets
   const getSheetsClient = () => {
-    const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    let clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
     if (!clientEmail || !privateKey) {
       throw new Error("Service Account credentials (EMAIL/PRIVATE_KEY) are missing.");
     }
+
+    clientEmail = clientEmail.trim().replace(/^["']|["']$/g, '');
 
     // Clean the private key:
     // 1. Remove any surrounding quotes that might have been pasted accidentally
@@ -985,11 +987,12 @@ async function startServer() {
       return res.status(400).json({ error: "Missing 'data' object" });
     }
 
-    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || req.body.spreadsheetId;
+    let spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || req.body.spreadsheetId;
     if (!spreadsheetId) {
       logToFile("[API] Submit failed: Spreadsheet ID missing");
       return res.status(400).json({ error: "Spreadsheet ID missing. Please set GOOGLE_SPREADSHEET_ID environment variable." });
     }
+    spreadsheetId = spreadsheetId.trim().replace(/^["']|["']$/g, '');
 
     try {
       const sheets = getSheetsClient();
