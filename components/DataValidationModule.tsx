@@ -5,7 +5,7 @@ import autoTable from 'jspdf-autotable';
 import SignatureCanvas from 'react-signature-canvas';
 import { supabase } from './lib/supabase';
 import { DBService } from '../services/db';
-import { LicensedClient, ClientReturn } from '../types';
+import { LicensedClient, ClientReturn, formatDateToDDMMYYYY, formatPermitNumber } from '../types';
 import { 
   ClipboardCheck, 
   Database, 
@@ -1108,8 +1108,14 @@ export function DataValidationModule() {
       const updatedClient = { ...selectedClient };
 
       mismatchFields.forEach(item => {
-        const chosenVal = item.selectedVal === 'validation' ? item.validationVal : item.clientVal;
+        let chosenVal = item.selectedVal === 'validation' ? item.validationVal : item.clientVal;
         
+        if (item.key === 'permitNo') {
+          chosenVal = formatPermitNumber(chosenVal, updatedForm.category || updatedClient.premiseCategory);
+        } else if (item.key === 'expiryDate') {
+          chosenVal = formatDateToDDMMYYYY(chosenVal);
+        }
+
         // Update form data state
         (updatedForm as any)[item.key] = chosenVal;
 
@@ -1120,6 +1126,7 @@ export function DataValidationModule() {
           updatedClient.premiseName = chosenVal;
         } else if (item.key === 'permitNo') {
           updatedClient.id = chosenVal;
+          updatedClient.permitNumber = chosenVal;
         } else if (item.key === 'location') {
           updatedClient.location = chosenVal;
         } else if (item.key === 'category') {
@@ -1737,19 +1744,36 @@ export function DataValidationModule() {
   };
 
   const viewPdf = async (path: string) => {
-    if (!supabase) return;
-    // Create a signed URL that expires in 60 seconds for security
-    const { data, error } = await supabase.storage
-      .from('validation-pdfs')
-      .createSignedUrl(path, 60);
-    
-    if (error) {
-      console.error('Error creating signed URL:', error);
+    if (!path) return;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+      window.open(path, '_blank');
       return;
     }
+    if (!supabase) return;
 
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank');
+    let cleanPath = path;
+    if (cleanPath.startsWith('validation-pdfs/')) {
+      cleanPath = cleanPath.replace('validation-pdfs/', '');
+    }
+
+    try {
+      // Create a signed URL that expires in 60 seconds for security
+      const { data, error } = await supabase.storage
+        .from('validation-pdfs')
+        .createSignedUrl(cleanPath, 60);
+      
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        alert(`Could not retrieve PDF: ${error.message}`);
+        return;
+      }
+
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (err: any) {
+      console.error('Failed to view PDF:', err);
+      alert('Failed to retrieve PDF document.');
     }
   };
 
@@ -1810,55 +1834,89 @@ export function DataValidationModule() {
 
       const pdf = await generatePDF(updatedData);
 
-      // Handle manual branches addition/update on submission if a client is selected
-      if (selectedClient) {
-        let clientUpdated = false;
-        const updatedClient = { ...selectedClient };
-        
+      // Update Clients module registry with the current 7-point profile reconciliation fields upon validation submission
+      const formattedPermitNo = formatPermitNumber(updatedData.permitNo, updatedData.category, new Date(updatedData.date).getFullYear() || new Date().getFullYear());
+      const formattedExpiryDate = formatDateToDDMMYYYY(updatedData.expiryDate);
+
+      let targetClient = selectedClient;
+      if (!targetClient && clients.length > 0) {
+        targetClient = findMatchingClient(updatedData.permitNo, updatedData.dboName) || null;
+      }
+
+      if (targetClient) {
+        const syncedClient: LicensedClient = {
+          ...targetClient,
+          clientName: updatedData.dboName.trim() || targetClient.clientName,
+          premiseName: updatedData.premiseName.trim() || targetClient.premiseName,
+          id: formattedPermitNo || targetClient.id,
+          permitNumber: formattedPermitNo || targetClient.permitNumber || targetClient.id,
+          location: updatedData.location.trim() || targetClient.location,
+          premiseCategory: (updatedData.category as any) || targetClient.premiseCategory,
+          tel: updatedData.contacts.trim() || targetClient.tel,
+          expiryDate: formattedExpiryDate || targetClient.expiryDate
+        };
+
         if (validationPremiseMode === 'new') {
-          // Register as a NEW branch
           const newBranch = {
-            id: updatedData.permitNo.trim() || `branch-${Date.now()}`,
+            id: formattedPermitNo,
             premiseName: updatedData.premiseName.trim(),
-            permitNumber: updatedData.permitNo.trim(),
+            permitNumber: formattedPermitNo,
             premiseCategory: updatedData.category,
             location: updatedData.location.trim(),
             county: updatedData.county.trim(),
-            expiryDate: updatedData.expiryDate || undefined,
+            expiryDate: formattedExpiryDate || undefined,
             operationalStatus: 'operating' as const
           };
-          const currentBranches = updatedClient.branches || [];
+          const currentBranches = syncedClient.branches || [];
           if (!currentBranches.some(b => b.permitNumber === newBranch.permitNumber)) {
-            updatedClient.branches = [...currentBranches, newBranch];
-            clientUpdated = true;
+            syncedClient.branches = [...currentBranches, newBranch];
           }
         } else if (validationPremiseMode.startsWith('branch-')) {
-          // Update an existing branch
           const branchId = validationPremiseMode.replace('branch-', '');
-          const currentBranches = updatedClient.branches || [];
-          updatedClient.branches = currentBranches.map(b => {
+          const currentBranches = syncedClient.branches || [];
+          syncedClient.branches = currentBranches.map(b => {
             if (b.id === branchId) {
               return {
                 ...b,
                 premiseName: updatedData.premiseName.trim(),
-                permitNumber: updatedData.permitNo.trim(),
+                permitNumber: formattedPermitNo,
                 premiseCategory: updatedData.category,
                 location: updatedData.location.trim(),
                 county: updatedData.county.trim(),
-                expiryDate: updatedData.expiryDate || undefined
+                expiryDate: formattedExpiryDate || undefined
               };
             }
             return b;
           });
-          clientUpdated = true;
         }
 
-        if (clientUpdated) {
-          await DBService.saveClient(updatedClient);
-          // Refresh clients list from database to ensure absolute source of truth
-          const refreshedClients = await DBService.getClients();
-          setClients(refreshedClients);
-        }
+        await DBService.saveClient(syncedClient);
+        const refreshedClients = await DBService.getClients();
+        setClients(refreshedClients);
+      } else {
+        // Create new client profile in licensed_clients registry
+        const newClientRecord: LicensedClient = {
+          id: formattedPermitNo,
+          clientName: updatedData.dboName.trim(),
+          premiseName: updatedData.premiseName.trim(),
+          startYear: new Date(updatedData.date).getFullYear() || new Date().getFullYear(),
+          startMonth: 'January',
+          startDate: formatDateToDDMMYYYY(updatedData.date),
+          endYear: null,
+          endMonth: null,
+          tel: updatedData.contacts.trim(),
+          contactPerson: updatedData.dboName.trim(),
+          location: updatedData.location.trim(),
+          premiseCategory: (updatedData.category as any) || 'Milk Bar',
+          county: updatedData.county.trim() || 'Kericho',
+          permitStatus: 'active',
+          operationalStatus: 'operating',
+          levyInfo: 'QFR',
+          expiryDate: formattedExpiryDate || undefined
+        };
+        await DBService.saveClient(newClientRecord);
+        const refreshedClients = await DBService.getClients();
+        setClients(refreshedClients);
       }
 
       // 1. Submit to Supabase (New)
@@ -2629,16 +2687,28 @@ export function DataValidationModule() {
                               <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                               This period has already been validated.
                             </p>
-                            {matchingCollection?.rawData && (
-                              <button
-                                type="button"
-                                onClick={() => handleRecallSubmission(matchingCollection.rawData)}
-                                className="self-start text-[10px] bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-1 rounded shadow-sm transition-colors cursor-pointer flex items-center gap-1"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                                Load & Amend Submission
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {matchingCollection?.pdfPath && (
+                                <button
+                                  type="button"
+                                  onClick={() => viewPdf(matchingCollection.pdfPath!)}
+                                  className="text-[10px] bg-blue-600 hover:bg-blue-700 text-white font-bold px-2 py-1 rounded shadow-xs transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  View PDF
+                                </button>
+                              )}
+                              {matchingCollection?.rawData && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRecallSubmission(matchingCollection.rawData)}
+                                  className="text-[10px] bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-1 rounded shadow-xs transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                  Load & Amend Submission
+                                </button>
+                              )}
+                            </div>
                           </motion.div>
                         );
                       })()}

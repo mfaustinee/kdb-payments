@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AgreementData, DebtorRecord, ArrearItem, Installment, StaffConfig, ClosureNotificationData, ComplaintData, InquiryData } from '../types';
-import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity, Building, TrendingUp } from 'lucide-react';
+import { Eye, Plus, Trash2, Database, FileCheck, UserPlus, MapPin, ShieldCheck, AlertTriangle, Send, Settings, Upload, CheckCircle2, Briefcase, FileText, FileSearch, Mail, Calendar, Check, Loader2, Search, X, Download, Server, Cpu, Globe, Key, Lock, AlertCircle, ExternalLink, PenTool, Trash, Activity, Building, TrendingUp, Menu } from 'lucide-react';
 import { PDFPreview } from './PDFPreview';
 import { ClosurePDFPreview } from './ClosurePDFPreview';
 import { ComplaintPDFPreview } from './ComplaintPDFPreview';
@@ -58,8 +58,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const navigate = useNavigate();
   const [tab, setTab] = useState<'requests_to_approve' | 'clients' | 'returns' | 'reports' | 'data_validation' | 'settings'>('requests_to_approve');
   const [approvalSubTab, setApprovalSubTab] = useState<'agreements' | 'cessations' | 'complaints' | 'inquiries'>('agreements');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const pendingRequestsCount = 
+    agreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length + 
+    closures.filter(c => c.status === 'submitted').length + 
+    (complaints?.filter(co => co.status === 'submitted').length || 0) + 
+    (inquiries?.filter(inq => inq.status === 'submitted').length || 0);
+
+  const getTabLabel = (currentTab: typeof tab) => {
+    switch (currentTab) {
+      case 'data_validation': return 'Data Validation Form';
+      case 'requests_to_approve': return 'Requests to Approve';
+      case 'clients': return 'Clients Registry';
+      case 'returns': return 'Client Returns';
+      case 'reports': return 'Compliance Reports';
+      case 'settings': return 'System Settings';
+      default: return 'Admin Workspace';
+    }
+  };
+
   const changeTab = (newTab: typeof tab) => {
     setTab(newTab);
+    setIsMobileMenuOpen(false);
     onRefresh?.();
   };
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
@@ -684,55 +706,244 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-10 items-start">
-        {/* LEFT SIDEBAR */}
-        <aside className="w-full lg:w-64 shrink-0 flex flex-col gap-6 lg:sticky lg:top-24 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm print:hidden">
-          <div>
-            <div className="flex items-center space-x-3">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Admin Workspace</h2>
+      {/* MOBILE HAMBURGER MENU NAVIGATION BAR (Visible on Mobile & Tablet) */}
+      <div className="lg:hidden bg-white p-4 rounded-[28px] border border-slate-200/80 shadow-md mb-6 sticky top-16 z-40 transition-all">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-3 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 transition-all flex items-center justify-center shadow-lg active:scale-95"
+              title="Toggle Workspace Navigation"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Active Admin Module</span>
               <div className="flex items-center space-x-2">
-                {onRefresh && (
-                  <button 
-                    onClick={onRefresh}
-                    disabled={isSyncing}
-                    className="p-1.5 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-emerald-600 group"
-                    title="Refresh Data"
-                  >
-                    <Loader2 className={`w-4 h-4 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
-                  </button>
+                <span className="text-sm font-black text-slate-800">{getTabLabel(tab)}</span>
+                {tab === 'requests_to_approve' && pendingRequestsCount > 0 && (
+                  <span className="px-2 py-0.5 text-[9px] bg-rose-500 text-white rounded-full font-black animate-pulse">
+                    {pendingRequestsCount}
+                  </span>
                 )}
               </div>
             </div>
-            <p className="text-slate-500 font-medium text-xs mt-2">Operational control for Kericho & Region levy compliance.</p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            {onRefresh && (
+              <button 
+                onClick={onRefresh}
+                disabled={isSyncing}
+                className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-all border border-slate-200"
+                title="Refresh Data"
+              >
+                <Loader2 className={`w-4 h-4 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Hamburger Dropdown / Drawer */}
+        {isMobileMenuOpen && (
+          <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 animate-in slide-in-from-top-3 duration-200">
+            <div className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Select Module</div>
+            
+            <button 
+              onClick={() => changeTab('data_validation')} 
+              className={`px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-between w-full text-left ${tab === 'data_validation' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center">
+                <FileCheck className="w-4 h-4 mr-3 shrink-0" />
+                Data Validation Form
+              </div>
+              {tab === 'data_validation' && <Check className="w-4 h-4 text-emerald-400" />}
+            </button>
+
+            <button 
+              onClick={() => changeTab('requests_to_approve')} 
+              className={`px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-between w-full text-left ${tab === 'requests_to_approve' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center">
+                <FileCheck className="w-4 h-4 mr-3 shrink-0" />
+                Requests to Approve
+              </div>
+              {pendingRequestsCount > 0 ? (
+                <span className="px-2 py-0.5 text-[9px] bg-rose-500 text-white rounded-full font-black animate-pulse">
+                  {pendingRequestsCount} Pending
+                </span>
+              ) : tab === 'requests_to_approve' ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : null}
+            </button>
+
+            <button 
+              onClick={() => changeTab('clients')} 
+              className={`px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-between w-full text-left ${tab === 'clients' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center">
+                <Building className="w-4 h-4 mr-3 shrink-0" />
+                Clients Registry
+              </div>
+              {tab === 'clients' && <Check className="w-4 h-4 text-emerald-400" />}
+            </button>
+
+            <button 
+              onClick={() => changeTab('returns')} 
+              className={`px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-between w-full text-left ${tab === 'returns' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center">
+                <FileText className="w-4 h-4 mr-3 shrink-0" />
+                Client Returns
+              </div>
+              {tab === 'returns' && <Check className="w-4 h-4 text-emerald-400" />}
+            </button>
+
+            <button 
+              onClick={() => changeTab('reports')} 
+              className={`px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-between w-full text-left ${tab === 'reports' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center">
+                <TrendingUp className="w-4 h-4 mr-3 shrink-0" />
+                Compliance Reports
+              </div>
+              {tab === 'reports' && <Check className="w-4 h-4 text-emerald-400" />}
+            </button>
+
+            <button 
+              onClick={() => changeTab('settings')} 
+              className={`px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-between w-full text-left ${tab === 'settings' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center">
+                <Settings className="w-4 h-4 mr-3 shrink-0" />
+                System Settings
+              </div>
+              {tab === 'settings' && <Check className="w-4 h-4 text-emerald-400" />}
+            </button>
+
+            <div className="pt-2 border-t border-slate-100">
+              <button 
+                onClick={() => { setIsMobileMenuOpen(false); navigate('/'); }} 
+                className="px-4 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 w-full text-left"
+              >
+                <Globe className="w-4 h-4 mr-3 shrink-0" />
+                Return to Client Portal
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        {/* DESKTOP SIDEBAR (Visible on Desktop) */}
+        <aside className={`hidden lg:flex flex-col gap-6 lg:sticky lg:top-24 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm print:hidden transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} shrink-0`}>
+          <div className="flex items-center justify-between">
+            {!isSidebarCollapsed && (
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Admin Workspace</h2>
+                  {onRefresh && (
+                    <button 
+                      onClick={onRefresh}
+                      disabled={isSyncing}
+                      className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-emerald-600"
+                      title="Refresh Data"
+                    >
+                      <Loader2 className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-slate-400 font-medium text-[11px] mt-1">Operational control for Kericho & Region levy compliance.</p>
+              </div>
+            )}
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className={`p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-all ${isSidebarCollapsed ? 'mx-auto' : ''}`}
+              title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
 
           <div className="flex flex-col gap-2">
-            <button onClick={() => changeTab('data_validation')} className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center w-full text-left ${tab === 'data_validation' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <FileCheck className="w-4 h-4 mr-3 shrink-0" /> Data Validation Form
+            <button 
+              onClick={() => changeTab('data_validation')} 
+              title="Data Validation Form"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'} ${tab === 'data_validation' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <FileCheck className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed && <span>Data Validation Form</span>}
             </button>
-            <button onClick={() => navigate('/')} className="px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center text-emerald-600 hover:bg-emerald-50 border border-emerald-100 w-full text-left">
-              <Globe className="w-4 h-4 mr-3 shrink-0" /> Client Portal
+
+            <button 
+              onClick={() => navigate('/')} 
+              title="Client Portal"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center text-emerald-600 hover:bg-emerald-50 border border-emerald-100 ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'}`}
+            >
+              <Globe className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed && <span>Client Portal</span>}
             </button>
+
             <div className="h-px bg-slate-100 my-1"></div>
-            <button onClick={() => changeTab('requests_to_approve')} className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center w-full text-left ${tab === 'requests_to_approve' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <FileCheck className="w-4 h-4 mr-3 shrink-0" /> Requests to Approve
-              {(agreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length + closures.filter(c => c.status === 'submitted').length + (complaints?.filter(co => co.status === 'submitted').length || 0) + (inquiries?.filter(inq => inq.status === 'submitted').length || 0)) > 0 && (
-                <span className="ml-auto px-1.5 py-0.5 text-[9px] bg-rose-500 text-white rounded-full font-black animate-pulse">
-                  {agreements.filter(a => a.status === 'submitted' || a.status === 'resubmission_requested').length + closures.filter(c => c.status === 'submitted').length + (complaints?.filter(co => co.status === 'submitted').length || 0) + (inquiries?.filter(inq => inq.status === 'submitted').length || 0)}
-                </span>
+
+            <button 
+              onClick={() => changeTab('requests_to_approve')} 
+              title="Requests to Approve"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center relative ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'} ${tab === 'requests_to_approve' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <FileCheck className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed ? (
+                <>
+                  <span>Requests to Approve</span>
+                  {pendingRequestsCount > 0 && (
+                    <span className="ml-auto px-1.5 py-0.5 text-[9px] bg-rose-500 text-white rounded-full font-black animate-pulse">
+                      {pendingRequestsCount}
+                    </span>
+                  )}
+                </>
+              ) : (
+                pendingRequestsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[8px] flex items-center justify-center font-black">
+                    {pendingRequestsCount}
+                  </span>
+                )
               )}
             </button>
-            <button onClick={() => changeTab('clients')} className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center w-full text-left ${tab === 'clients' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <Building className="w-4 h-4 mr-3 shrink-0" /> Clients
+
+            <button 
+              onClick={() => changeTab('clients')} 
+              title="Clients Registry"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'} ${tab === 'clients' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Building className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed && <span>Clients</span>}
             </button>
-            <button onClick={() => changeTab('returns')} className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center w-full text-left ${tab === 'returns' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <FileText className="w-4 h-4 mr-3 shrink-0" /> Returns
+
+            <button 
+              onClick={() => changeTab('returns')} 
+              title="Client Returns"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'} ${tab === 'returns' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <FileText className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed && <span>Returns</span>}
             </button>
-            <button onClick={() => changeTab('reports')} className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center w-full text-left ${tab === 'reports' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <TrendingUp className="w-4 h-4 mr-3 shrink-0" /> Reports
+
+            <button 
+              onClick={() => changeTab('reports')} 
+              title="Compliance Reports"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'} ${tab === 'reports' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <TrendingUp className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed && <span>Reports</span>}
             </button>
-            <button onClick={() => changeTab('settings')} className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center w-full text-left ${tab === 'settings' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <Settings className="w-4 h-4 mr-3 shrink-0" /> Settings
+
+            <button 
+              onClick={() => changeTab('settings')} 
+              title="System Settings"
+              className={`px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'w-full text-left'} ${tab === 'settings' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Settings className={`w-4 h-4 shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+              {!isSidebarCollapsed && <span>Settings</span>}
             </button>
           </div>
         </aside>

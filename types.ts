@@ -201,6 +201,92 @@ export const getEnv = (key: string, fallback: string = ''): string => {
   return import.meta.env[key] || fallback;
 };
 
+// Category Short Codes: CP (Cooling Plant), CI (Cottage Industry), MB (Milk Bar), DP (Dispenser), PR (Processor), MD (Mini Dairy)
+export const getCategoryShortCode = (category?: string): string => {
+  if (!category) return 'MB';
+  const c = category.toLowerCase().trim();
+  if (c.includes('cooling') || c === 'cp') return 'CP';
+  if (c.includes('cottage') || c === 'ci') return 'CI';
+  if (c.includes('milk bar') || c === 'mb' || c.includes('bar')) return 'MB';
+  if (c.includes('dispenser') || c === 'dp') return 'DP';
+  if (c.includes('processor') || c === 'pr' || c.includes('process')) return 'PR';
+  if (c.includes('mini') || c === 'md' || c.includes('dairy')) return 'MD';
+  return 'MB';
+};
+
+export const formatPermitNumber = (permitNo: string | undefined | null, category?: string, year?: number | string): string => {
+  const code = getCategoryShortCode(category);
+  const yr = year || new Date().getFullYear();
+
+  if (!permitNo || !permitNo.trim()) {
+    const seq = Math.floor(10000 + Math.random() * 90000);
+    return `KDB/${code}/${seq}/${yr}`;
+  }
+  
+  const trimmed = permitNo.trim();
+  // Check if it already matches KDB/XX/12345/YYYY
+  const match = trimmed.match(/^KDB\/(CP|CI|MB|DP|PR|MD)\/(\d+)\/(\d{4})$/i);
+  if (match) {
+    return `KDB/${match[1].toUpperCase()}/${match[2].padStart(5, '0')}/${match[3]}`;
+  }
+
+  // Handle KDB/LC/12345 or KDB/MB/12345 or other variations
+  if (trimmed.startsWith('KDB/')) {
+    const parts = trimmed.split('/');
+    if (parts.length === 4) {
+      const numDigits = parts[2].replace(/\D/g, '');
+      const num = numDigits ? numDigits.padStart(5, '0').slice(-5) : '10001';
+      const y = parts[3].match(/\d{4}/) ? parts[3] : yr;
+      return `KDB/${code}/${num}/${y}`;
+    } else if (parts.length === 3) {
+      const numDigits = parts[1].replace(/\D/g, '');
+      const num = numDigits ? numDigits.padStart(5, '0').slice(-5) : '10001';
+      const y = parts[2].match(/\d{4}/) ? parts[2] : yr;
+      return `KDB/${code}/${num}/${y}`;
+    }
+  }
+
+  // Extract digits for sequence
+  const digits = trimmed.replace(/\D/g, '');
+  const seq = digits.length >= 5 ? digits.slice(-5) : (digits ? digits.padStart(5, '0') : '10001');
+  return `KDB/${code}/${seq}/${yr}`;
+};
+
+export const formatDateToDDMMYYYY = (dateStr: string | Date | undefined | null): string => {
+  if (!dateStr) return '';
+  if (typeof dateStr === 'string') {
+    const s = dateStr.trim();
+    if (!s) return '';
+    if (s.toLowerCase() === 'not filed' || s.toLowerCase() === 'n/a') return s;
+    // If already in DD/MM/YYYY format
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+    // If in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const [y, m, d] = s.split('T')[0].split('-');
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+  }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+export const formatDDMMYYYYToYYYYMMDD = (dateStr: string | undefined | null): string => {
+  if (!dateStr) return '';
+  const s = dateStr.trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    const [d, m, y] = s.split('/');
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.split('T')[0];
+  }
+  return '';
+};
+
 export interface ClientBranch {
   id: string; // unique ID or permit number
   premiseName: string;
@@ -220,6 +306,8 @@ export interface LicensedClient {
   startMonth: string;
   endYear: number | null;
   endMonth: string | null;
+  startDate?: string; // Full Start Date in DD/MM/YYYY format
+  endDate?: string;   // Full End Date in DD/MM/YYYY format
   tel: string;
   contactPerson: string;
   location: string;

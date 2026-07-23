@@ -389,65 +389,11 @@ export const AgreementForm: React.FC<AgreementFormProps> = ({ agreements, debtor
               </div>
 
               <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Execution Method *</label>
-                    <div className="flex p-1 bg-slate-100 rounded-xl w-full sm:w-auto">
-                        <button 
-                            type="button"
-                            onClick={() => { setSignatureMethod('draw'); updateField('clientSignature', ''); }}
-                            className={`flex-1 sm:px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center ${signatureMethod === 'draw' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <PenTool className="w-3 h-3 mr-2" /> Digital Draw
-                        </button>
-                        <button 
-                            type="button"
-                            onClick={() => { setSignatureMethod('upload'); updateField('clientSignature', ''); }}
-                            className={`flex-1 sm:px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center ${signatureMethod === 'upload' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <Camera className="w-3 h-3 mr-2" /> Upload Photo
-                        </button>
-                    </div>
-                </div>
-
-                {signatureMethod === 'draw' ? (
-                    <SignaturePad 
-                        label="Authorized Digital Signature *" 
-                        onSave={handleSignatureSave} 
-                        value={formData.clientSignature}
-                    />
-                ) : (
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Signature Photo / Camera Capture *</label>
-                        <div 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="border-2 border-dashed border-slate-200 rounded-2xl p-8 bg-slate-50 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-all group"
-                        >
-                            {formData.clientSignature ? (
-                                <div className="relative w-full flex justify-center">
-                                    <img src={formData.clientSignature} className="max-h-40 rounded-lg shadow-sm" alt="Signature preview" />
-                                    <div className="absolute inset-0 bg-emerald-600/0 group-hover:bg-emerald-600/10 flex items-center justify-center rounded-lg transition-all">
-                                        <Upload className="text-emerald-600 opacity-0 group-hover:opacity-100 w-8 h-8" />
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="bg-white p-4 rounded-full shadow-sm mb-4 text-slate-400 group-hover:text-emerald-600 transition-colors">
-                                        <Camera className="w-8 h-8" />
-                                    </div>
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tap to capture or upload</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">Ensure signature is clear and on a white background</p>
-                                </>
-                            )}
-                            <input 
-                                type="file" 
-                                ref={fileInputRef}
-                                className="hidden" 
-                                accept="image/*" 
-                                onChange={handleFileUpload} 
-                            />
-                        </div>
-                    </div>
-                )}
+                <SignaturePad 
+                    label="Authorized Execution Signature *" 
+                    onSave={handleSignatureSave} 
+                    value={formData.clientSignature}
+                />
               </div>
 
               <div className="flex space-x-4 pt-4">

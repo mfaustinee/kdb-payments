@@ -125,6 +125,14 @@ const clientToDb = (client: any) => {
     out.expiry_date = client.expiryDate;
     delete out.expirydate;
   }
+  if (client.startDate !== undefined) {
+    out.start_date = client.startDate;
+    delete out.startdate;
+  }
+  if (client.endDate !== undefined) {
+    out.end_date = client.endDate;
+    delete out.enddate;
+  }
   return out;
 };
 
@@ -138,6 +146,8 @@ const clientFromDb = (dbObj: any): LicensedClient => {
   if (dbObj.startmonth !== undefined) out.startMonth = dbObj.startmonth;
   if (dbObj.endyear !== undefined) out.endYear = dbObj.endyear ? Number(dbObj.endyear) : null;
   if (dbObj.endmonth !== undefined) out.endMonth = dbObj.endmonth;
+  if (dbObj.start_date !== undefined) out.startDate = dbObj.start_date;
+  if (dbObj.end_date !== undefined) out.endDate = dbObj.end_date;
   if (dbObj.tel !== undefined) out.tel = dbObj.tel;
   if (dbObj.contacts !== undefined) out.contactPerson = dbObj.contacts;
   if (dbObj.location !== undefined) out.location = dbObj.location;

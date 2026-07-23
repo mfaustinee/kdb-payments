@@ -15,28 +15,19 @@ import {
 
 interface SignaturePadProps {
   onSave: (signature: string) => void;
-  label: string;
+  label?: string;
   value?: string;
 }
 
-type SignatureMode = 'draw' | 'upload' | 'camera';
-
-export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value }) => {
+export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label = "Digital Signature *", value }) => {
   const sigPad = useRef<SignatureCanvas>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [signature, setSignature] = useState<string | null>(value || null);
-  const [activeMode, setActiveMode] = useState<SignatureMode>('draw');
-  const [autoOptimize, setAutoOptimize] = useState<boolean>(true);
-  const [rawImage, setRawImage] = useState<string | null>(null);
-  
-  // Camera-specific states
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
-  
-  // Drag and drop state
-  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   // Sync internal state with prop value if it changes externally
   useEffect(() => {
@@ -45,7 +36,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
     }
   }, [value]);
 
-  // Clean up camera stream on unmount or tab switch
+  // Clean up camera stream on unmount
   useEffect(() => {
     return () => {
       if (stream) {
@@ -54,17 +45,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
     };
   }, [stream]);
 
-  // Handle Mode switching
-  const handleModeChange = (mode: SignatureMode) => {
-    // If transitioning away from camera, make sure we stop the feed
-    if (activeMode === 'camera' && stream) {
-      stopCamera();
-    }
-    setActiveMode(mode);
-    setCameraError(null);
-  };
-
-  // Helper: Binarization filter (clears grey/colored background, converts white paper to transparent, inks signature in rich deep slate)
+  // Helper: Binarization filter (clears white/grey paper background, converts white paper to transparent)
   const applyBinarization = (base64: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -82,8 +63,6 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imgData.data;
         
-        // Calculate dynamic threshold or use fixed visual scanning standard threshold
-        // White paper typically tests > 130 brightness
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
@@ -114,14 +93,14 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
     });
   };
 
-  // Helper: Compress signature and keep database light
-  const compressImage = (base64: string, applyOptimization: boolean = false): Promise<string> => {
+  // Helper: Compress signature image to keep state light
+  const compressImage = (base64: string, shouldBinarize: boolean = false): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.src = base64;
       img.onload = async () => {
         const canvas = document.createElement('canvas');
-        const maxWidth = 500; // Optimal size for high contrast document stamps
+        const maxWidth = 500;
         const scale = maxWidth / img.width;
         canvas.width = maxWidth;
         canvas.height = img.height * scale;
@@ -133,7 +112,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
         
         const compressedBase64 = canvas.toDataURL('image/png', 0.85);
         
-        if (applyOptimization) {
+        if (shouldBinarize) {
           const binarized = await applyBinarization(compressedBase64);
           resolve(binarized);
         } else {
@@ -146,20 +125,39 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
     });
   };
 
-  // Draw Mode - Save Signature Canvas
+  // Save Drawn Signature from Canvas
   const saveDrawnSignature = async () => {
     if (sigPad.current && !sigPad.current.isEmpty()) {
-      const rawData = sigPad.current.getTrimmedCanvas().toDataURL('image/png');
-      setRawImage(rawData);
-      
-      // Standard signature canvas doesn't need paper background clearing because it starts transparent
-      const processed = await compressImage(rawData, false);
-      setSignature(processed);
-      onSave(processed);
+      const sigData = sigPad.current.getTrimmedCanvas().toDataURL('image/png');
+      const compressed = await compressImage(sigData, false);
+      setSignature(compressed);
+      onSave(compressed);
     }
   };
 
-  // Camera Mode - Turn on camera
+  // Handle Image File Upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files[0]) {
+      const file = files[0];
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload a valid image file (PNG, JPG, JPEG)');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          const compressed = await compressImage(result, true);
+          setSignature(compressed);
+          onSave(compressed);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Camera Capture
   const startCamera = async () => {
     setCameraError(null);
     setIsCameraActive(true);
@@ -173,9 +171,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
       }
     } catch (err: any) {
       console.error("Camera access failed:", err);
-      setCameraError(
-        "Could not access your camera. Please ensure permissions are granted or switch to Draw/Upload mode."
-      );
+      setCameraError("Camera access failed. Please select an image file or draw directly.");
       setIsCameraActive(false);
     }
   };
@@ -188,7 +184,6 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
     setIsCameraActive(false);
   };
 
-  // Camera Mode - Snap Photo
   const snapPhoto = async () => {
     if (videoRef.current) {
       const video = videoRef.current;
@@ -198,296 +193,150 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, label, value
       
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
-        // Draw the current video frame on the temporary canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/png');
-        setRawImage(dataUrl);
-        
-        // Auto-process to extract black ink and discard white paper backdrop
-        const processed = await compressImage(dataUrl, autoOptimize);
-        setSignature(processed);
-        onSave(processed);
+        const compressed = await compressImage(dataUrl, true);
+        setSignature(compressed);
+        onSave(compressed);
         stopCamera();
       }
     }
   };
 
-  // File Upload Mode - File reader helper
-  const processUploadedFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (PNG, JPG, JPEG)');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      if (dataUrl) {
-        setRawImage(dataUrl);
-        const processed = await compressImage(dataUrl, autoOptimize);
-        setSignature(processed);
-        onSave(processed);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files[0]) {
-      processUploadedFile(files[0]);
-    }
-  };
-
-  // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      processUploadedFile(files[0]);
-    }
-  };
-
-  // Re-run optimization toggle
-  const handleToggleAutoOptimize = async (isEnabled: boolean) => {
-    setAutoOptimize(isEnabled);
-    if (rawImage) {
-      const processed = await compressImage(rawImage, isEnabled);
-      setSignature(processed);
-      onSave(processed);
-    }
-  };
-
-  // Global Clear
+  // Clear Signature
   const clearSignature = () => {
     setSignature(null);
-    setRawImage(null);
     onSave('');
-    if (activeMode === 'camera') {
-      startCamera();
+    if (sigPad.current) {
+      sigPad.current.clear();
     }
   };
 
   return (
-    <div className="w-full p-6 bg-white rounded-3xl shadow-sm border border-slate-200">
-      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-        {label}
-      </label>
-      
-      {/* 3-Way Mode Toggle Tabs */}
-      {!signature && (
-        <div className="flex bg-slate-50 p-1 rounded-2xl mb-4 border border-slate-100">
-          <button
-            type="button"
-            onClick={() => handleModeChange('draw')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeMode === 'draw' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <PenTool size={14} /> Draw
-          </button>
-          <button
-            type="button"
-            onClick={() => handleModeChange('upload')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeMode === 'upload' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <Upload size={14} /> Upload Image
-          </button>
-          <button
-            type="button"
-            onClick={() => handleModeChange('camera')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeMode === 'camera' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <Camera size={14} /> Camera Capture
-          </button>
-        </div>
+    <div className="w-full space-y-2">
+      {label && (
+        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+          {label}
+        </label>
       )}
 
-      {/* Signature Render State */}
-      {signature ? (
-        <div className="space-y-4">
-          <div className="relative group p-6 bg-[#fcfdfd] rounded-2xl border border-slate-100 flex flex-col items-center justify-center">
-            <div className="min-h-36 max-h-44 w-full flex items-center justify-center bg-white rounded-xl border border-dashed border-slate-200 p-4 shadow-inner">
-              <img src={signature} alt="Signature Preview" className="max-h-32 object-contain" />
-            </div>
-            
-            <button 
-              type="button"
-              onClick={clearSignature}
-              className="absolute top-3 right-3 bg-rose-500 text-white p-2.5 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-600 shadow-md"
-            >
-              <Trash2 size={14} />
-            </button>
-            
-            <div className="w-full flex flex-col sm:flex-row items-center justify-between mt-2 pt-2 border-t border-slate-50 gap-2">
-              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-                <Check size={12} className="stroke-[3]" /> Captured Successfully
-              </span>
-              
-              {/* Intelligent optimization checkbox for uploaded/camera signatures */}
-              {activeMode !== 'draw' && (
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input 
-                    type="checkbox"
-                    checked={autoOptimize}
-                    onChange={(e) => handleToggleAutoOptimize(e.target.checked)}
-                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
-                  />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles size={10} className="text-amber-500" /> Transparent Ink Inkify
-                  </span>
-                </label>
-              )}
+      {!signature ? (
+        <div className="space-y-3">
+          {/* Signature Canvas Pad */}
+          <div className="border-2 border-dashed border-gray-200 rounded-2xl p-2 bg-gray-50 hover:border-gray-300 transition-colors">
+            <SignatureCanvas
+              ref={sigPad}
+              penColor="#0f172a"
+              canvasProps={{
+                className: "w-full h-36 rounded-xl cursor-crosshair",
+                style: { background: '#ffffff', touchAction: 'none' }
+              }}
+            />
+            <div className="flex justify-between items-center mt-2 px-1">
+              <button
+                type="button"
+                onClick={() => sigPad.current?.clear()}
+                className="text-[11px] font-bold text-gray-500 hover:text-red-500 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear Pad
+              </button>
+              <button
+                type="button"
+                onClick={saveDrawnSignature}
+                className="text-[11px] font-black text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 py-1 px-3 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+              >
+                <PenTool className="w-3.5 h-3.5" /> Save Signature
+              </button>
             </div>
           </div>
-        </div>
-      ) : (
-        /* Form Interactive States */
-        <div className="min-h-[180px]">
-          {/* Mode 1: Signature Canvas */}
-          {activeMode === 'draw' && (
-            <div className="space-y-3">
-              <div className="border border-slate-200 rounded-2xl p-1 bg-slate-50 hover:bg-slate-100/50 transition-colors">
-                <SignatureCanvas
-                  ref={sigPad}
-                  penColor="#0f172a"
-                  canvasProps={{
-                    className: "w-full h-40 rounded-xl cursor-crosshair",
-                    style: { background: '#ffffff', touchAction: 'none' }
-                  }}
+
+          {/* Separator / Alternative Upload Option */}
+          <div className="flex items-center gap-2 justify-center my-1">
+            <div className="h-px bg-gray-200 flex-1"></div>
+            <span className="text-[9px] text-gray-400 uppercase font-black tracking-widest">
+              OR UPLOAD IMAGE / CAMERA CAPTURE
+            </span>
+            <div className="h-px bg-gray-200 flex-1"></div>
+          </div>
+
+          {/* Upload & Camera Buttons */}
+          {!isCameraActive ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 border border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 rounded-xl p-2.5 text-center cursor-pointer transition-all flex items-center justify-center gap-2"
+              >
+                <Upload className="w-3.5 h-3.5 text-gray-500" />
+                <span className="text-xs font-bold text-gray-700">Upload Signature File</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
                 />
-              </div>
-              <div className="flex justify-between items-center px-1">
-                <button
-                  type="button"
-                  onClick={() => sigPad.current?.clear()}
-                  className="text-xs font-black text-slate-400 hover:text-rose-600 flex items-center gap-1 transition-colors uppercase tracking-wider"
-                >
-                  <Trash2 size={13} /> Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={saveDrawnSignature}
-                  className="text-xs font-black text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 py-1.5 px-3.5 rounded-xl flex items-center gap-1 transition-all uppercase tracking-wider"
-                >
-                  <PenTool size={13} /> Capture Draw
-                </button>
-              </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={startCamera}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Camera</span>
+              </button>
             </div>
-          )}
-
-          {/* Mode 2: Drag & Drop File Upload */}
-          {activeMode === 'upload' && (
-            <div 
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all flex flex-col items-center justify-center min-h-[160px] cursor-pointer ${
-                isDragging 
-                  ? 'border-emerald-500 bg-emerald-50/50' 
-                  : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70 hover:border-slate-300'
-              }`}
-              onClick={() => document.getElementById('signature-file-input')?.click()}
-            >
-              <input 
-                id="signature-file-input"
-                type="file"
-                accept="image/*"
-                onChange={handleFileInputChange}
-                className="hidden"
-              />
-              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mb-3 shadow-inner">
-                <ImageIcon size={20} />
-              </div>
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Drag your signature file here or <span className="text-blue-600 underline">Browse</span>
-              </p>
-              <p className="text-[10px] text-slate-400 font-medium mt-1">
-                Upload physical signature on plain paper. JPG or PNG.
-              </p>
-              
-              <div className="mt-4 flex items-center gap-1 bg-amber-50 text-amber-800 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider">
-                <Sparkles size={10} /> Auto background remover active
-              </div>
-            </div>
-          )}
-
-          {/* Mode 3: Cam Capture */}
-          {activeMode === 'camera' && (
-            <div className="space-y-4">
-              {!isCameraActive ? (
-                <div className="border border-slate-200 bg-slate-50 rounded-2xl p-8 text-center flex flex-col items-center justify-center min-h-[160px]">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mb-3">
-                    <Camera size={20} />
-                  </div>
-                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Sign on paper and snap with camera
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-medium max-w-xs mt-1 leading-relaxed">
-                    We will binarize and auto-optimize the lighting for perfect document inclusion.
-                  </p>
-                  
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="mt-4 px-5 py-2.5 bg-slate-900 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-colors shadow-sm"
-                  >
-                    Activate Camera
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {cameraError && (
-                    <div className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl flex items-center gap-2">
-                      <AlertCircle size={14} className="shrink-0" />
-                      {cameraError}
-                    </div>
-                  )}
-
-                  <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-200 shadow-inner max-w-md mx-auto aspect-video flex items-center justify-center">
-                    <video 
-                      ref={videoRef}
-                      autoPlay 
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
-                    
-                    {/* Visual alignment frame helper for signatures */}
-                    <div className="absolute inset-x-8 inset-y-10 border-2 border-dashed border-emerald-400/40 rounded-xl pointer-events-none flex items-center justify-center">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-black/60 px-2 py-0.5 rounded">
-                        Align Signature Within Box
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <button
-                      type="button"
-                      onClick={stopCamera}
-                      className="text-xs font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
-                    >
-                      Cancel
-                    </button>
-                    
-                    <button
-                      type="button"
-                      onClick={snapPhoto}
-                      className="bg-emerald-600 text-white font-black text-xs uppercase tracking-widest py-2.5 px-6 rounded-xl hover:bg-emerald-700 transition-all shadow-md flex items-center gap-2"
-                    >
-                      <Zap size={12} className="fill-white" /> Snap & Dry-Ink Signature
-                    </button>
-                  </div>
+          ) : (
+            /* Active Camera Stream Modal Overlay */
+            <div className="space-y-3 bg-slate-900 p-4 rounded-2xl text-white">
+              {cameraError && (
+                <div className="text-xs text-rose-400 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" /> {cameraError}
                 </div>
               )}
+              <div className="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center">
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                <div className="absolute inset-4 border-2 border-dashed border-emerald-400/50 rounded-lg pointer-events-none flex items-center justify-center">
+                  <span className="text-[9px] font-black uppercase text-emerald-400 bg-black/70 px-2 py-0.5 rounded">
+                    Position Signature Paper Here
+                  </span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={snapPhoto}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-white" /> Snap Photo
+                </button>
+              </div>
             </div>
           )}
+        </div>
+      ) : (
+        /* Saved Signature Display State */
+        <div className="relative group border rounded-xl p-3 bg-white flex flex-col items-center justify-center min-h-[110px] shadow-sm">
+          <img src={signature} alt="Captured Signature" className="max-h-24 object-contain" />
+          <button
+            type="button"
+            onClick={clearSignature}
+            className="absolute -top-2 -right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors cursor-pointer"
+            title="Clear & Re-sign"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <div className="mt-1 text-[9px] font-black text-emerald-600 uppercase tracking-wider flex items-center gap-1">
+            <Check className="w-3 h-3" /> Signature Saved
+          </div>
         </div>
       )}
     </div>

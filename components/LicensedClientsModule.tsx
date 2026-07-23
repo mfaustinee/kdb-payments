@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LicensedClient, ClientBranch } from '../types';
+import { LicensedClient, ClientBranch, formatDateToDDMMYYYY, formatPermitNumber } from '../types';
 import { DBService } from '../services/db';
 import { 
   Plus, 
@@ -47,6 +47,8 @@ export const LicensedClientsModule: React.FC = () => {
   const [startMonth, setStartMonth] = useState<string>('January');
   const [endYear, setEndYear] = useState<string>('');
   const [endMonth, setEndMonth] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [tel, setTel] = useState<string>('');
   const [contactPerson, setContactPerson] = useState<string>('');
   const [location, setLocation] = useState<string>('');
@@ -115,17 +117,20 @@ export const LicensedClientsModule: React.FC = () => {
 
   const openAddModal = () => {
     setEditingClient(null);
-    setPermitNumber(`KDB/LC/${Date.now().toString().slice(-6)}`);
+    setPremiseCategory('Milk Bar');
+    const currentYr = new Date().getFullYear();
+    setStartYear(currentYr);
+    setPermitNumber(formatPermitNumber('', 'Milk Bar', currentYr));
     setClientName('');
     setPremiseName('');
-    setStartYear(new Date().getFullYear());
     setStartMonth('January');
     setEndYear('');
     setEndMonth('');
+    setStartDate('');
+    setEndDate('');
     setTel('');
     setContactPerson('');
     setLocation('');
-    setPremiseCategory('Milk Bar');
     setCounty('Kericho');
     setCoolingCapacity('');
     setPermitStatus('active');
@@ -138,23 +143,25 @@ export const LicensedClientsModule: React.FC = () => {
 
   const openEditModal = (client: LicensedClient) => {
     setEditingClient(client);
-    setPermitNumber(client.id);
+    setPremiseCategory(client.premiseCategory);
+    setStartYear(client.startYear);
+    setPermitNumber(formatPermitNumber(client.id || client.permitNumber, client.premiseCategory, client.startYear));
     setClientName(client.clientName);
     setPremiseName(client.premiseName);
-    setStartYear(client.startYear);
     setStartMonth(client.startMonth);
     setEndYear(client.endYear ? String(client.endYear) : '');
     setEndMonth(client.endMonth || '');
+    setStartDate(client.startDate ? formatDateToDDMMYYYY(client.startDate) : '');
+    setEndDate(client.endDate ? formatDateToDDMMYYYY(client.endDate) : '');
     setTel(client.tel);
     setContactPerson(client.contactPerson);
     setLocation(client.location);
-    setPremiseCategory(client.premiseCategory);
     setCounty(client.county);
     setCoolingCapacity(client.coolingCapacity ? String(client.coolingCapacity) : '');
     setPermitStatus(client.permitStatus);
     setOperationalStatus(client.operationalStatus);
     setLevyInfo(client.levyInfo);
-    setExpiryDate(client.expiryDate || '');
+    setExpiryDate(client.expiryDate ? formatDateToDDMMYYYY(client.expiryDate) : '');
     setBranches(client.branches || []);
     setIsModalOpen(true);
   };
@@ -172,8 +179,8 @@ export const LicensedClientsModule: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedPermitNumber = permitNumber.trim();
-    if (!trimmedPermitNumber) {
+    const formattedPermitNo = formatPermitNumber(permitNumber, premiseCategory, startYear);
+    if (!formattedPermitNo) {
       alert('Permit Number is required');
       return;
     }
@@ -184,44 +191,56 @@ export const LicensedClientsModule: React.FC = () => {
 
     // Permit Status is strictly dictated by the permit expiry date
     let resolvedPermitStatus: 'active' | 'inactive' = 'active';
+    const formattedExpiry = expiryDate ? formatDateToDDMMYYYY(expiryDate) : undefined;
     if (expiryDate) {
-      const exp = new Date(expiryDate);
-      if (!isNaN(exp.getTime())) {
+      const parts = expiryDate.split('/');
+      let exp: Date | null = null;
+      if (parts.length === 3) {
+        exp = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      } else {
+        exp = new Date(expiryDate);
+      }
+      if (exp && !isNaN(exp.getTime())) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const expWithTime = new Date(exp);
-        expWithTime.setHours(23, 59, 59, 999);
-        resolvedPermitStatus = expWithTime >= today ? 'active' : 'inactive';
+        exp.setHours(23, 59, 59, 999);
+        resolvedPermitStatus = exp >= today ? 'active' : 'inactive';
       }
     } else {
       resolvedPermitStatus = permitStatus;
     }
 
+    const formattedStart = startDate ? formatDateToDDMMYYYY(startDate) : undefined;
+    const formattedEnd = endDate ? formatDateToDDMMYYYY(endDate) : undefined;
+
     const record: LicensedClient = {
-      id: trimmedPermitNumber,
-      clientName,
-      premiseName,
+      id: formattedPermitNo,
+      permitNumber: formattedPermitNo,
+      clientName: clientName.trim(),
+      premiseName: premiseName.trim(),
       startYear,
       startMonth,
       endYear: endYear ? parseInt(endYear) : null,
       endMonth: endMonth || null,
-      tel,
-      contactPerson,
-      location,
+      startDate: formattedStart,
+      endDate: formattedEnd,
+      tel: tel.trim(),
+      contactPerson: contactPerson.trim(),
+      location: location.trim(),
       premiseCategory,
-      county,
+      county: county.trim(),
       coolingCapacity: (premiseCategory === 'Cooling Plant' || premiseCategory === 'Processor') && coolingCapacity 
         ? parseInt(coolingCapacity) 
         : undefined,
       permitStatus: resolvedPermitStatus,
       operationalStatus,
       levyInfo,
-      expiryDate: expiryDate || undefined,
+      expiryDate: formattedExpiry,
       branches: branches.length > 0 ? branches : undefined
     };
 
     let oldIdToDelete = '';
-    if (editingClient && editingClient.id !== trimmedPermitNumber) {
+    if (editingClient && editingClient.id !== formattedPermitNo) {
       oldIdToDelete = editingClient.id;
     }
 
@@ -579,8 +598,8 @@ export const LicensedClientsModule: React.FC = () => {
         csvClientNames.add(uniqueKey);
 
         const dbDuplicateExists = clients.some(c => 
-          c.clientName.trim().toLowerCase() === cName.toLowerCase() && 
-          c.premiseName.trim().toLowerCase() === pName.toLowerCase()
+          (c.clientName || '').trim().toLowerCase() === cName.toLowerCase() && 
+          (c.premiseName || '').trim().toLowerCase() === pName.toLowerCase()
         );
         if (dbDuplicateExists) {
           errors.push(`Row ${rowNum}: Duplicate client entry. Client "${cName}" with premise "${pName}" already exists in the database.`);
@@ -614,12 +633,21 @@ export const LicensedClientsModule: React.FC = () => {
         const rawEndMonth = getVal(rowData, ['endmonth', 'closedmonth', 'closemonth']).trim();
         const endMParsed = rawEndMonth ? normalizePeriod(rawEndMonth) : null;
 
-        const id = getVal(rowData, ['id', 'clientid', 'permitno']) || `KDB/LC/${Date.now().toString().slice(-4)}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        const rawPermitNo = getVal(rowData, ['id', 'clientid', 'permitno', 'permitnumber', 'permit_number']);
+        const formattedPermitNo = formatPermitNumber(rawPermitNo, cat, startY);
 
-        const rawExpiryDate = getVal(rowData, ['expirydate', 'expiry', 'permitexpiry']).trim();
+        const rawStartDate = getVal(rowData, ['startdate', 'start_date', 'start', 'registrationdate']).trim();
+        const formattedStartDate = rawStartDate ? formatDateToDDMMYYYY(rawStartDate) : undefined;
+
+        const rawEndDate = getVal(rowData, ['enddate', 'end_date', 'end', 'closuredate']).trim();
+        const formattedEndDate = rawEndDate ? formatDateToDDMMYYYY(rawEndDate) : undefined;
+
+        const rawExpiryDate = getVal(rowData, ['expirydate', 'expiry', 'permitexpiry', 'expiry_date']).trim();
+        const formattedExpiryDate = rawExpiryDate ? formatDateToDDMMYYYY(rawExpiryDate) : undefined;
 
         records.push({
-          id,
+          id: formattedPermitNo,
+          permitNumber: formattedPermitNo,
           clientName: cName,
           premiseName: pName,
           premiseCategory: cat as any,
@@ -627,6 +655,8 @@ export const LicensedClientsModule: React.FC = () => {
           startMonth: startM,
           endYear: isNaN(endYParsed as any) ? null : endYParsed,
           endMonth: endMParsed,
+          startDate: formattedStartDate,
+          endDate: formattedEndDate,
           tel: phone,
           contactPerson: contact,
           location: loc,
@@ -635,7 +665,7 @@ export const LicensedClientsModule: React.FC = () => {
           permitStatus: status,
           operationalStatus: opStatus,
           levyInfo: levy,
-          expiryDate: rawExpiryDate || undefined
+          expiryDate: formattedExpiryDate
         });
       }
       
@@ -669,11 +699,16 @@ export const LicensedClientsModule: React.FC = () => {
 
   // Filter clients based on search & filters
   const filteredClients = clients.filter(client => {
-    const matchesSearch = 
-      client.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.premiseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const qLower = (searchTerm || '').trim().toLowerCase();
+    const matchesSearch = !qLower ||
+      (client.clientName || '').toLowerCase().includes(qLower) ||
+      (client.premiseName || '').toLowerCase().includes(qLower) ||
+      (client.contactPerson || '').toLowerCase().includes(qLower) ||
+      (client.location || '').toLowerCase().includes(qLower) ||
+      (client.id || '').toLowerCase().includes(qLower) ||
+      (client.permitNumber || '').toLowerCase().includes(qLower) ||
+      (client.tel || '').toLowerCase().includes(qLower) ||
+      (client.county || '').toLowerCase().includes(qLower);
     
     const matchesCategory = categoryFilter === 'All' || client.premiseCategory === categoryFilter;
     const matchesLevy = levyFilter === 'All' || client.levyInfo === levyFilter;
@@ -996,13 +1031,13 @@ export const LicensedClientsModule: React.FC = () => {
                         )}
                       </td>
                       <td className="px-6 py-4 space-y-1">
-                        <div className="text-slate-800 flex items-center gap-1">
+                        <div className="text-slate-800 flex items-center gap-1 font-medium">
                           <Calendar size={12} className="text-slate-400" />
-                          <span>{client.startMonth} {client.startYear}</span>
+                          <span>{client.startDate ? formatDateToDDMMYYYY(client.startDate) : `${client.startMonth} ${client.startYear}`}</span>
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          {client.operationalStatus === 'closed' && client.endYear ? (
-                            <span className="text-rose-600">Ended: {client.endMonth} {client.endYear}</span>
+                          {client.operationalStatus === 'closed' ? (
+                            <span className="text-rose-600 font-bold">Ended: {client.endDate ? formatDateToDDMMYYYY(client.endDate) : (client.endYear ? `${client.endMonth} ${client.endYear}` : 'Closed')}</span>
                           ) : (
                             <span className="text-emerald-600 uppercase tracking-widest font-black text-[9px]">Currently Operating</span>
                           )}
@@ -1037,8 +1072,8 @@ export const LicensedClientsModule: React.FC = () => {
                             })();
 
                             return (
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${resolvedPermitStatus === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`} title={client.expiryDate ? `Expires: ${client.expiryDate}` : undefined}>
-                                Permit: {resolvedPermitStatus === 'active' ? 'Valid' : 'Expired'} {client.expiryDate ? `(${client.expiryDate})` : ''}
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${resolvedPermitStatus === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`} title={client.expiryDate ? `Expires: ${formatDateToDDMMYYYY(client.expiryDate)}` : undefined}>
+                                Permit: {resolvedPermitStatus === 'active' ? 'Valid' : 'Expired'} {client.expiryDate ? `(${formatDateToDDMMYYYY(client.expiryDate)})` : ''}
                               </span>
                             );
                           })()}
@@ -1142,14 +1177,15 @@ export const LicensedClientsModule: React.FC = () => {
               
               {/* Permit Number / License ID */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Permit Number (License ID) *</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Permit Number (Format: KDB/XX/12345/Year) *</label>
                 <input
                   required
                   type="text"
                   value={permitNumber}
                   onChange={e => setPermitNumber(e.target.value)}
-                  placeholder="e.g. KDB/LC/123456"
-                  className="w-full px-5 py-3.5 rounded-2xl border bg-slate-50 focus:bg-white focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-bold text-slate-800 text-xs"
+                  onBlur={() => setPermitNumber(formatPermitNumber(permitNumber, premiseCategory, startYear))}
+                  placeholder="e.g. KDB/MB/12345/2026"
+                  className="w-full px-5 py-3.5 rounded-2xl border bg-slate-50 focus:bg-white focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-bold text-slate-800 text-xs font-mono"
                 />
               </div>
 
@@ -1187,7 +1223,11 @@ export const LicensedClientsModule: React.FC = () => {
                   <div className="relative">
                     <select
                       value={premiseCategory}
-                      onChange={e => setPremiseCategory(e.target.value as LicensedClient['premiseCategory'])}
+                      onChange={e => {
+                        const newCat = e.target.value as LicensedClient['premiseCategory'];
+                        setPremiseCategory(newCat);
+                        setPermitNumber(prev => formatPermitNumber(prev, newCat, startYear));
+                      }}
                       className="appearance-none w-full px-5 py-3.5 rounded-2xl border bg-slate-50 focus:bg-white focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-bold text-slate-800 text-xs cursor-pointer"
                     >
                       {categories.map(cat => (
@@ -1291,6 +1331,31 @@ export const LicensedClientsModule: React.FC = () => {
                         className="w-full px-3 py-2.5 rounded-xl border bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-bold text-slate-800 text-[11px]"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Specific Start Date & End Date (DD/MM/YYYY) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-200/60">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider block ml-1">Start Date (DD/MM/YYYY)</label>
+                    <input
+                      type="text"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      placeholder="e.g. 15/01/2023"
+                      className="w-full px-3 py-2.5 rounded-xl border bg-white focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-bold text-slate-800 text-[11px]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider block ml-1">End Date (DD/MM/YYYY)</label>
+                    <input
+                      disabled={operationalStatus === 'operating'}
+                      type="text"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      placeholder="e.g. 31/12/2025"
+                      className="w-full px-3 py-2.5 rounded-xl border bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-4 focus:ring-slate-900/10 outline-none transition-all font-bold text-slate-800 text-[11px]"
+                    />
                   </div>
                 </div>
               </div>
