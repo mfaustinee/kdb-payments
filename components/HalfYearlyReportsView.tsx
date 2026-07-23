@@ -165,7 +165,7 @@ export const HalfYearlyReportsView: React.FC<HalfYearlyReportsViewProps> = ({ cl
 
   const halfYearlyValidationsCount = validations.filter(v => {
     const vYear = Number(v.year);
-    return hMonths.some(qm => qm.name.toLowerCase() === v.period.toLowerCase() && Number(qm.year) === vYear) && v.status === 'Approved';
+    return hMonths.some(qm => (qm.name || '').toLowerCase() === (v.period || '').toLowerCase() && Number(qm.year) === vYear) && v.status === 'Approved';
   }).length;
 
   const halfYearlyCumulativeDebt = (() => {
@@ -184,7 +184,7 @@ export const HalfYearlyReportsView: React.FC<HalfYearlyReportsViewProps> = ({ cl
   const getMonthlyReportData = (mName: string, yr: number) => {
     const mReturns = returns.filter(r => 
       r.year === yr && 
-      r.period.toLowerCase() === mName.toLowerCase()
+      (r.period || '').toLowerCase() === (mName || '').toLowerCase()
     );
     
     const collMonthNum = (monthsList.indexOf(mName) + 1) % 12;

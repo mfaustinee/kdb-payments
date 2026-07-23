@@ -175,7 +175,7 @@ export const QuarterlyReportsView: React.FC<QuarterlyReportsViewProps> = ({ clie
 
   const quarterlyValidationsCount = validations.filter(v => {
     const vYear = Number(v.year);
-    return qMonths.some(qm => qm.name.toLowerCase() === v.period.toLowerCase() && Number(qm.year) === vYear) && v.status === 'Approved';
+    return qMonths.some(qm => (qm.name || '').toLowerCase() === (v.period || '').toLowerCase() && Number(qm.year) === vYear) && v.status === 'Approved';
   }).length;
 
   const quarterlyCumulativeDebt = (() => {
@@ -194,7 +194,7 @@ export const QuarterlyReportsView: React.FC<QuarterlyReportsViewProps> = ({ clie
   const getMonthlyReportData = (mName: string, yr: number) => {
     const mReturns = returns.filter(r => 
       r.year === yr && 
-      r.period.toLowerCase() === mName.toLowerCase()
+      (r.period || '').toLowerCase() === (mName || '').toLowerCase()
     );
     
     const collMonthNum = (monthsList.indexOf(mName) + 1) % 12;

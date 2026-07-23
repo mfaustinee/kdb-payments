@@ -998,10 +998,12 @@ export const ClientReturnsModule: React.FC<ClientReturnsModuleProps> = ({
 
   // Filter returns for general display table
   const filteredReturns = returns.filter(ret => {
-    const matchesSearch = 
-      ret.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ret.txnRef.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ret.comments.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!ret) return false;
+    const qSafe = String(searchQuery || '').trim().toLowerCase();
+    const matchesSearch = !qSafe ||
+      String(ret.clientName || '').toLowerCase().includes(qSafe) ||
+      String(ret.txnRef || '').toLowerCase().includes(qSafe) ||
+      String(ret.comments || '').toLowerCase().includes(qSafe);
     
     const matchesYear = filterYear === 'All' || ret.year.toString() === filterYear;
     const matchesMonth = filterMonth === 'All' || ret.period === filterMonth;
@@ -1038,12 +1040,13 @@ export const ClientReturnsModule: React.FC<ClientReturnsModuleProps> = ({
   });
 
   const filteredClientSummaries = clientSummaries.filter(summary => {
-    const qSafe = searchQuery.toLowerCase();
-    const matchesSearch = 
-      summary.client.clientName.toLowerCase().includes(qSafe) ||
-      summary.client.premiseName.toLowerCase().includes(qSafe) ||
-      (summary.client.location || '').toLowerCase().includes(qSafe) ||
-      (summary.client.id || '').toLowerCase().includes(qSafe);
+    if (!summary || !summary.client) return false;
+    const qSafe = String(searchQuery || '').trim().toLowerCase();
+    const matchesSearch = !qSafe ||
+      String(summary.client.clientName || '').toLowerCase().includes(qSafe) ||
+      String(summary.client.premiseName || '').toLowerCase().includes(qSafe) ||
+      String(summary.client.location || '').toLowerCase().includes(qSafe) ||
+      String(summary.client.id || '').toLowerCase().includes(qSafe);
 
     let matchesStatusFilter = true;
     if (filterStatus !== 'All') {
@@ -1903,7 +1906,7 @@ export const ClientReturnsModule: React.FC<ClientReturnsModuleProps> = ({
                                   {filteredLedger.map((item, idx) => {
                                     const matchingClient = clients.find(c => 
                                       c.id === item.id || 
-                                      c.clientName.toLowerCase() === item.dboName.toLowerCase()
+                                      String(c.clientName || '').toLowerCase() === String(item.dboName || '').toLowerCase()
                                     );
                                     return (
                                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">

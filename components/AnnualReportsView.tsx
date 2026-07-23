@@ -182,7 +182,7 @@ export const AnnualReportsView: React.FC<AnnualReportsViewProps> = ({ clients, r
 
   const annualValidationsCount = validations.filter(v => {
     const vYear = Number(v.year);
-    return fyMonths.some(qm => qm.name.toLowerCase() === v.period.toLowerCase() && Number(qm.year) === vYear) && v.status === 'Approved';
+    return fyMonths.some(qm => (qm.name || '').toLowerCase() === (v.period || '').toLowerCase() && Number(qm.year) === vYear) && v.status === 'Approved';
   }).length;
 
   const annualCumulativeDebt = (() => {
@@ -201,7 +201,7 @@ export const AnnualReportsView: React.FC<AnnualReportsViewProps> = ({ clients, r
   const getMonthlyReportData = (mName: string, yr: number) => {
     const mReturns = returns.filter(r => 
       r.year === yr && 
-      r.period.toLowerCase() === mName.toLowerCase()
+      (r.period || '').toLowerCase() === (mName || '').toLowerCase()
     );
     
     const collMonthNum = (monthsList.indexOf(mName) + 1) % 12;
@@ -485,7 +485,7 @@ export const AnnualReportsView: React.FC<AnnualReportsViewProps> = ({ clients, r
     monthsInFY.forEach(m => {
       const mReturns = returns.filter(r => 
         r.year === m.year && 
-        r.period.toLowerCase() === m.name.toLowerCase()
+        (r.period || '').toLowerCase() === (m.name || '').toLowerCase()
       );
       // gross + debt
       const gross = mReturns.reduce((sum, r) => sum + r.paymentAmount, 0);
@@ -542,7 +542,7 @@ export const AnnualReportsView: React.FC<AnnualReportsViewProps> = ({ clients, r
     monthsInFY.forEach(m => {
       const mReturns = returns.filter(r => 
         r.year === m.year && 
-        r.period.toLowerCase() === m.name.toLowerCase()
+        (r.period || '').toLowerCase() === (m.name || '').toLowerCase()
       );
       total += mReturns.filter(r => r.outstandingBalance > 0).reduce((sum, r) => sum + r.outstandingBalance, 0);
     });

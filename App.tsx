@@ -384,7 +384,7 @@ const App: React.FC = () => {
         }
         
         const client = clients.find(c => c.id === clientId) || 
-                       clients.find(c => c.clientName.toLowerCase() === closure.dboName.toLowerCase()) ||
+                       clients.find(c => String(c.clientName || '').toLowerCase() === String(closure.dboName || '').toLowerCase()) ||
                        clients.find(c => c.tel === closure.tel);
                        
         if (client) {

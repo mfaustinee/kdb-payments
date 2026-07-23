@@ -134,7 +134,7 @@ export const CollectionAnalysisView: React.FC<CollectionAnalysisViewProps> = ({ 
 
   // 2. compliant filings - submitted filings for the active period by QFR active clients
   const periodReturns = returns.filter(r => 
-    periodMonths.some(pm => pm.name.toLowerCase() === r.period.toLowerCase() && r.year === pm.year)
+    periodMonths.some(pm => (pm.name || '').toLowerCase() === (r.period || '').toLowerCase() && r.year === pm.year)
   );
 
   const compliantFilings = periodReturns.filter(r => {
@@ -163,12 +163,12 @@ export const CollectionAnalysisView: React.FC<CollectionAnalysisViewProps> = ({ 
     if (isNaN(dateObj.getTime())) return false;
     const mName = MONTHS_LIST[dateObj.getMonth()];
     const yr = dateObj.getFullYear();
-    return periodMonths.some(pm => pm.name.toLowerCase() === mName.toLowerCase() && pm.year === yr);
+    return periodMonths.some(pm => (pm.name || '').toLowerCase() === (mName || '').toLowerCase() && pm.year === yr);
   };
 
   const priorArrearsPaidReturns = returns.filter(r => {
     // Return period must be prior to the selected periods
-    const isPrior = !periodMonths.some(pm => pm.name.toLowerCase() === r.period.toLowerCase() && r.year === pm.year);
+    const isPrior = !periodMonths.some(pm => (pm.name || '').toLowerCase() === (r.period || '').toLowerCase() && r.year === pm.year);
     if (!isPrior) return false;
 
     // Payment must fall within this period

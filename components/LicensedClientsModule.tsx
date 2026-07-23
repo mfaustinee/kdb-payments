@@ -699,16 +699,17 @@ export const LicensedClientsModule: React.FC = () => {
 
   // Filter clients based on search & filters
   const filteredClients = clients.filter(client => {
-    const qLower = (searchTerm || '').trim().toLowerCase();
+    if (!client) return false;
+    const qLower = String(searchTerm || '').trim().toLowerCase();
     const matchesSearch = !qLower ||
-      (client.clientName || '').toLowerCase().includes(qLower) ||
-      (client.premiseName || '').toLowerCase().includes(qLower) ||
-      (client.contactPerson || '').toLowerCase().includes(qLower) ||
-      (client.location || '').toLowerCase().includes(qLower) ||
-      (client.id || '').toLowerCase().includes(qLower) ||
-      (client.permitNumber || '').toLowerCase().includes(qLower) ||
-      (client.tel || '').toLowerCase().includes(qLower) ||
-      (client.county || '').toLowerCase().includes(qLower);
+      String(client.clientName || '').toLowerCase().includes(qLower) ||
+      String(client.premiseName || '').toLowerCase().includes(qLower) ||
+      String(client.contactPerson || '').toLowerCase().includes(qLower) ||
+      String(client.location || '').toLowerCase().includes(qLower) ||
+      String(client.id || '').toLowerCase().includes(qLower) ||
+      String(client.permitNumber || '').toLowerCase().includes(qLower) ||
+      String(client.tel || '').toLowerCase().includes(qLower) ||
+      String(client.county || '').toLowerCase().includes(qLower);
     
     const matchesCategory = categoryFilter === 'All' || client.premiseCategory === categoryFilter;
     const matchesLevy = levyFilter === 'All' || client.levyInfo === levyFilter;

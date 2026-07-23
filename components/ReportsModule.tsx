@@ -266,7 +266,7 @@ export const ReportsModule: React.FC<ReportsModuleProps> = ({ onRefresh }) => {
   // Returns for the selected period
   const selectedPeriodReturns = returns.filter(r => 
     r.year === selectedYear && 
-    r.period.toLowerCase() === selectedMonth.toLowerCase()
+    (r.period || '').toLowerCase() === (selectedMonth || '').toLowerCase()
   );
 
   // Returns representing previous month arrears, collected/paid in the collection month
@@ -400,7 +400,7 @@ export const ReportsModule: React.FC<ReportsModuleProps> = ({ onRefresh }) => {
   // Monthly validations count
   const monthlyValidationsCounter = validations.filter(v => 
     Number(v.year) === selectedYear && 
-    v.period.toLowerCase() === selectedMonth.toLowerCase() &&
+    (v.period || '').toLowerCase() === (selectedMonth || '').toLowerCase() &&
     v.status === 'Approved'
   ).length;
 
